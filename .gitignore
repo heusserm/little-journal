@@ -19,3 +19,8 @@ iosApp/build/
 
 # Kotlin Multiplatform scratch
 .kotlin/
+
+# Desktop dev database
+journal.db
+journal.db-shm
+journal.db-wal

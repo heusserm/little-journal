@@ -62,3 +62,9 @@ compose.desktop {
         }
     }
 }
+
+// Desktop run tasks execute from the repo root so the dev database lands in
+// the project directory rather than wherever Gradle happens to be.
+tasks.withType<JavaExec>().configureEach {
+    workingDir = rootProject.projectDir
+}

@@ -324,6 +324,25 @@ single repeated factory call (`val s = state()` at the top of each test). That
 is deliberate isolation, not duplication, and penalising it punishes the better
 pattern. It now requires a shared prefix of at least two lines.
 
+## Rebuilding the app icon
+
+```bash
+python3 tools/make_icon.py            # both platforms
+python3 tools/make_icon.py --preview  # preview.png, to look at it first
+```
+
+The two platforms want opposite things, which is why this writes them
+separately rather than resizing one file:
+
+- **iOS** — full bleed, RGB, **no alpha**. App Store Connect rejects an icon
+  with an alpha channel outright.
+- **Android** — inset onto transparency at 84%. The system draws its own mask,
+  and an icon filling its square gets clipped. Android Lint calls this
+  `IconLauncherShape`.
+
+Regenerating is idempotent: the output is byte-identical to what is committed,
+so a stray run will not show up as a diff.
+
 ## Health report
 
 Measured 2026-08-20 with the commands above. Regenerate rather than trust these

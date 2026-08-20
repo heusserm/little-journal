@@ -553,4 +553,5 @@ silently.
 App Store work for Matt's other apps follows `~/Code/AppStoreListings/STATUS.md`
 — read it before any store work. Screenshots live in
 `~/Code/AppStoreScreenshots/<size>/<app>_<device>_<screen>.png`, never inside
-app repos. Apple ID `the Apple ID recorded in STATUS.md`, Team `A69JRS6V57`.
+app repos. The Apple ID to sign in with is recorded in that STATUS.md, which
+is not a public file — it is deliberately not repeated here.

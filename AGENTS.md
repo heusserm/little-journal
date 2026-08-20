@@ -542,6 +542,15 @@ transcription.en" there. It ships no ASR assets and never will.
 files; one blind add swept 933 objects into the repo. And `.gitignore` does not
 untrack what is already tracked.
 
+**Check what you are writing into a public repo.** An earlier version of this
+file recorded a personal Apple ID -- the login username for the account that
+controls App Store releases -- in a public repository, because the information
+was handy and nobody asked where it would end up. Removing it needed a history
+rewrite and a force push across two repos. Identifiers that ship inside the app
+anyway (the Team ID, in `project.yml` and in every `.ipa`) are fine. Account
+usernames are not. The value lives in `~/Code/AppStoreListings/STATUS.md`,
+which is not public, and belongs only there.
+
 **Write down why, not just what.** The comment on `onThisDay` records that
 Kotlin's `substring` is 0-based and SQLite's `substr` is 1-based, so the same
 offset appears as 5 in Kotlin and 6 in `Entry.sq`. A linter flagged a magic

@@ -61,12 +61,34 @@ final class IosTranscriber: NSObject, Transcriber {
                 return
             }
 
+            // Microphone access is not enough. Speech recognition is a separate
+            // permission, and without it the OS refuses to subscribe the app to
+            // any ASR asset -- which surfaces as the misleading "not subscribed
+            // to transcription.en".
+            onMain { listener.onStatus(message: "Asking for speech recognition") }
+            let speechAuth: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { cont in
+                SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0) }
+            }
+            guard speechAuth == .authorized else {
+                onMain {
+                    listener.onError(message: "Speech recognition not authorised (\(speechAuth.rawValue)). Enable it in Settings > Little Journal.")
+                }
+                return
+            }
+
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
 
             let wanted = Locale(identifier: "en-US")
+            let supported = await SpeechTranscriber.supportedLocales
             let locale = await SpeechTranscriber.supportedLocale(equivalentTo: wanted) ?? wanted
+            if supported.isEmpty {
+                onMain {
+                    listener.onError(message: "This device reports no speech locales. On the Simulator that is expected and unfixable.")
+                }
+                return
+            }
             let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
             self.transcriber = transcriber
 
@@ -77,15 +99,25 @@ final class IosTranscriber: NSObject, Transcriber {
             // no speech assets -- the log says "GeneralASR is not supported on
             // this platform" and reports zero available languages -- so dictation
             // can only be exercised on a physical device.
-            _ = try? await AssetInventory.reserve(locale: locale)
+            do {
+                _ = try await AssetInventory.reserve(locale: locale)
+            } catch {
+                // Do not swallow this -- it is the step that decides whether the
+                // asset check below can work at all.
+                onMain { listener.onStatus(message: "Locale reserve failed: \(error.localizedDescription)") }
+            }
 
             // Language models are downloaded on demand and managed by the OS,
             // not bundled with the app. First run pays this cost once.
             let status = await AssetInventory.status(forModules: [transcriber])
             if status != .installed {
-                onMain { listener.onStatus(message: "Downloading language model…") }
+                onMain { listener.onStatus(message: "Model status \(status) — downloading…") }
                 if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
                     try await request.downloadAndInstall()
+                    onMain { listener.onStatus(message: "Model installed") }
+                } else {
+                    onMain { listener.onError(message: "No installable model for \(locale.identifier).") }
+                    return
                 }
             }
 

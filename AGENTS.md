@@ -114,6 +114,13 @@ the *system* SQLite, and the Kotlin framework does not bundle it, so linking
 fails with an undefined `_sqlite3_step`. The flag lives in `OTHER_LDFLAGS` in
 `iosApp/project.yml`.
 
+**Microphone permission is not speech permission.** They are two separate
+grants. `NSSpeechRecognitionUsageDescription` in the plist only supplies the
+prompt text — the app must still call
+`SFSpeechRecognizer.requestAuthorization`. Without that grant the OS refuses to
+subscribe the app to any ASR asset, and the symptom is the deeply misleading
+"<bundle-id> is not subscribed to transcription.en".
+
 **Speech recognition does not work in the iOS Simulator — at all.** The runtime
 ships no ASR assets. The log says `GeneralASR is not supported on this platform`
 and reports zero available languages, so `AssetInventory` can never install a

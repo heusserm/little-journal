@@ -21,12 +21,14 @@ and test; that one covers what the thing does.
 
 ```
 storage/                        Persistence. Built, tested.
-  src/commonMain/sqldelight/      Entry.sq, EntryTag.sq — schema + queries
-  src/commonMain/kotlin/          JournalEntry, JournalRepository
+  src/commonMain/sqldelight/      Entry.sq, EntryTag.sq, EntryWord.sq —
+                                  schema + queries; 1.sqm — migration to v2
+  src/commonMain/kotlin/          JournalEntry, JournalRepository, SearchTokens
   src/jvmMain/                    JDBC driver + desktopRepository()
   src/androidMain/                AndroidSqliteDriver + androidRepository()
   src/iosMain/                    NativeSqliteDriver + iosRepository()
-  src/jvmTest/                    JournalRepositoryTest — 10 tests
+  src/jvmTest/                    JournalRepositoryTest, SearchTest,
+                                  SearchTokensTest, PersistenceTest
 
 app/                            Compose UI. Built.
   src/commonMain/kotlin/          App, JournalState, 4 screens, Format,
@@ -66,7 +68,7 @@ Generated SQLDelight code: `storage/build/generated/sqldelight/`
 One block, in the order that fails fastest:
 
 ```bash
-./gradlew :storage:jvmTest :app:desktopTest            # 100 Kotlin tests
+./gradlew :storage:jvmTest :app:desktopTest            # 121 Kotlin tests
 xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   -derivedDataPath iosApp/dd                           # 10 Swift tests
@@ -81,7 +83,7 @@ versions. Keep it that way.
 
 ## Running the tests
 
-110 tests: 100 Kotlin, 10 Swift. All of them pass; keep it that way.
+131 tests: 121 Kotlin, 10 Swift. All of them pass; keep it that way.
 
 ```bash
 # Everything Kotlin — the usual command
@@ -106,7 +108,9 @@ HTML reports land in `storage/build/reports/tests/jvmTest/index.html` and
 |---|---:|---|
 | `JournalRepositoryTest` | 10 | schema behaviour: tombstones, date moves, counts |
 | `JournalRepositoryQueryTest` | 7 | ranges, tags, limits |
-| `PersistenceTest` | 5 | file-backed DB survives reopening — the only test proving a relaunch does not wipe the journal |
+| `PersistenceTest` | 7 | file-backed DB survives reopening — the only test proving a relaunch does not wipe the journal — and the schema 1 → 2 upgrade |
+| `SearchTest` | 14 | word search: whole words, multi-term, prefix on the term being typed, reindex on edit, paging past SQLite's parameter ceiling |
+| `SearchTokensTest` | 5 | the tokeniser, with no database in sight |
 | `JournalStateTest` | 17 | dictation callbacks, draft handling, time cleanup |
 | `JournalStatePagingTest` | 11 | month paging, editing, delete |
 | `SpokenTextTest` + `EdgeTest` | 16 | time correction, both directions |
@@ -134,7 +138,7 @@ xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
 xcrun xccov view --report --json iosApp/cov.xcresult
 ```
 
-Kotlin is at **93% line / 72% branch**. Generated SQLDelight output is excluded
+Kotlin is at **95.8% line / 77.8% branch**. Generated SQLDelight output is excluded
 from the report; counting it flatters storage and hides gaps elsewhere.
 
 `IosTranscriber.swift` sits at **54%**. The rest is unreachable: it touches
@@ -212,40 +216,59 @@ xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
 python3 tools/crap.py
 ```
 
-**As of 2026-08-20: 85 methods scored, mean 2.1, max 20.0, none over 30.**
+**As of 2026-08-20: 88 methods scored, mean 2.3, max 20.0, none over 30.**
 
 Everything scoring above 2 — the rest are at or below their own complexity and
 need no attention:
 
 | CRAP | cx | loc | cover | method | file |
 |---:|---:|---:|---:|---|---|
+| **20.0** | 4 | 26 | 0% | `prepareTranscriber` | IosTranscriber.swift |
 | **20.0** | 4 | 17 | 0% | `pump` | IosTranscriber.swift |
-| 6.6 | 6 | 9 | 75% | `CurrentScreen` | App.kt |
+| 6.0 | 6 | 9 | 100% | `CurrentScreen` | App.kt |
 | 6.0 | 6 | 39 | 100% | `SearchScreen` | SearchScreen.kt |
 | 6.0 | 2 | 11 | 0% | `databasePath` | main.kt (desktop) |
 | 4.2 | 4 | 7 | 75% | `back` | JournalState.kt |
-| 4.2 | 4 | 26 | 78% | `prepareTranscriber` | IosTranscriber.swift |
 | 4.0 | 4 | 33 | 100% | `DayCell` | CalendarScreen.kt |
 | 4.0 | 4 | 42 | 100% | `EditorScreen` | EditorScreen.kt |
 | 4.0 | 4 | 14 | 100% | `commitDraft` | JournalState.kt |
 | 4.0 | 4 | 19 | 100% | `save` | JournalState.kt |
-| 3.3 | 3 | 18 | 68% | `authorize` | IosTranscriber.swift |
+| 3.7 | 2 | 12 | 25% | `begin` | IosTranscriber.swift |
+| 3.6 | 3 | 21 | 59% | `authorize` | IosTranscriber.swift |
 | 3.0 | 3 | 53 | 100% | `CalendarScreen` | CalendarScreen.kt |
 | 3.0 | 3 | 28 | 100% | `DayScreen` | DayScreen.kt |
+| 3.0 | 3 | 9 | 100% | `MovedFromNote` | EditorScreen.kt |
+| 3.0 | 3 | 11 | 100% | `MoodRow` | EditorScreen.kt |
+| 3.0 | 3 | 7 | 100% | `onFinal` | JournalState.kt |
+| 3.0 | 3 | 3 | 100% | `isClock` | SpokenText.kt |
 | 3.0 | 3 | 16 | 100% | `LiveTranscript` | TodayScreen.kt |
 | 3.0 | 3 | 16 | 100% | `CaptureActions` | TodayScreen.kt |
-| 3.0 | 3 | 9 | 100% | `MovedFromNote` | EditorScreen.kt |
-| 3.0 | 3 | 7 | 100% | `onFinal` | JournalState.kt |
+| 3.0 | 3 | 11 | 100% | `search` | JournalRepository.kt |
+| 3.0 | 3 | 8 | 100% | `ensureIndexed` | JournalRepository.kt |
+| 3.0 | 3 | 13 | 100% | `fileDriver` | Drivers.jvm.kt |
+
+**`crap.py` under-counts.** It reports 88 methods where `health.py` finds 112,
+because its brace matching merges adjacent expression-bodied functions —
+`idsStartingWith` is swallowed into `idsExactly` and reported as its line
+count, and `forDate`, `withTag` and the extension functions never appear at
+all. Same class of parser bug as the one `scrap.py` had. It understates the
+denominator; it does not distort any score, since every merged function is
+complexity 1 and fully covered. `HEALTH.md` is the more complete list.
 
 **`pump` is the one worth knowing about.** It drains recognizer results and
-dispatches them to the app, it is completely untested, and it is the only
-method in the project scoring in double digits. It cannot be reached from the
-Simulator because it needs a live `SpeechTranscriber`. If dictation ever
-misbehaves in a way the UI can see — text arriving twice, partials never
-settling, results lost — start there.
+dispatches them to the app, it is completely untested, and with
+`prepareTranscriber` it shares the top of the table — the only two methods in
+the project scoring in double digits. It cannot be reached from the Simulator
+because it needs a live `SpeechTranscriber`. If dictation ever misbehaves in a
+way the UI can see — text arriving twice, partials never settling, results
+lost — start there.
 
 `databasePath` scores 6 on complexity 2 purely because it is uncovered; it is
 eleven lines of desktop-only path resolution and not worth chasing.
+
+`begin` and `authorize` are partly covered for the same reason as everything
+else in `IosTranscriber.swift`: the Simulator has no speech assets, so the
+paths that matter never run there.
 
 Everything else scoring above 2 is fully covered and scores its own complexity,
 which is the floor. Nothing there needs work.
@@ -301,8 +324,8 @@ people to ignore the tool.
 
 `--write-baseline` and `--compare` track drift over time.
 
-**As of 2026-08-20: mean SCRAP 6.0 across 110 tests, worst 25. `dry.py` reports
-1.2% duplication.** A baseline is committed at `tools/.scrap-baseline.json`.
+**As of 2026-08-20: mean SCRAP 5.6 across 131 tests, worst 25. `dry.py` reports
+1.7% duplication.** A baseline is committed at `tools/.scrap-baseline.json`.
 
 Both found real problems on their first run, which is the only reason they are
 worth keeping:
@@ -350,15 +373,15 @@ numbers; every one of them is reproducible from `tools/`.
 
 | Metric | Value |
 |---|---|
-| Production methods | 109, across 1,280 lines |
-| Tests | **110** — 100 Kotlin, 10 Swift |
-| Assertions | 190, 1.8 per test |
-| Kotlin line coverage | **95.7%** (605/632) |
-| Kotlin branch coverage | 77.0% (234/304) |
+| Production methods | 112, across 952 lines |
+| Tests | **131** — 121 Kotlin, 10 Swift |
+| Assertions | 220, 1.7 per test |
+| Kotlin line coverage | **95.8%** (643/671) |
+| Kotlin branch coverage | 77.8% (249/320) |
 | Swift line coverage | 38.6% (90/233) |
 | CRAP | mean **2.3**, max 20.0, **none over 30** |
-| SCRAP | mean **6.0** (healthy), worst 25 |
-| Duplication | 1.8% (16 redundant lines) |
+| SCRAP | mean **5.6** (healthy), worst 25 |
+| Duplication | 1.7% (16 redundant lines) |
 | detekt | **0** |
 | SwiftLint | **0** |
 | Android Lint | 4 warnings, all "newer version available" |
@@ -432,6 +455,34 @@ ships 3.19. This is a `minSdk` constraint, not a dialect setting. Writes use
 single writer and always supplies every column — `REPLACE` deletes the old row
 first, so a partial column list would blank `created_at`.
 
+**`IN ?` binds one host parameter per element, and SQLite allows 999 of them
+before 3.32.** Android API 26 ships 3.19, so a `WHERE id IN ?` handed a
+thousand ids fails with "too many SQL variables" — on Android only. The
+desktop driver allows 32,766 and iOS is generous too, so **every platform this
+project can test would pass**. `JournalRepository.search` therefore orders and
+cuts matches to one page *before* binding them (`liveIdsByDate` in Entry.sq),
+and never binds more than `limit` ids. The test that pins this says plainly
+that it cannot reproduce the failure it guards.
+
+**There is no FTS5 on Android, and SQLDelight cannot type FTS at all.**
+Search is an ordinary `entry_word` table, not a virtual table, for two reasons
+that were measured rather than assumed:
+
+* `CREATE VIRTUAL TABLE t USING fts5(x)` on an API 28 emulator — SQLite 3.22,
+  *newer* than the 3.19 that minSdk 26 ships — fails with `no such module:
+  fts5`. The same statement with `fts4` works. Neither iOS nor desktop would
+  ever have shown this: both have fts5.
+* SQLDelight 2.1.0 has no FTS grammar in any dialect, up to and including
+  `sqlite-3-38`. It parses the `CREATE VIRTUAL TABLE` as an opaque module
+  invocation and resolves the table to **zero columns**, so every query
+  against it dies at compile time with `Failed to compile
+  SqlCompoundSelectStmtImpl(COMPOUND_SELECT_STMT): []`. Even a plain
+  `SELECT id FROM t`. Using FTS here would mean raw driver SQL outside the
+  generated API.
+
+So `fts5` is doubly out and `fts4` is still out on the second count. See
+`EntryWord.sq`.
+
 **Timestamps are truncated to milliseconds on write.** The schema stores epoch
 millis; `Clock.System.now()` offers nanoseconds. Without truncation
 `save(e) != byId(e.id)`, which would read as spurious churn to any future sync.
@@ -486,12 +537,12 @@ iPhone 17 Pro but has never been run.
 
 ## Status
 
-Storage, UI, the iOS wrapper, dictation, spoken-time cleanup and search are
-built and committed. Runs on the iOS simulator and installs on a physical
+Storage, UI, the iOS wrapper, dictation, spoken-time cleanup and word-indexed
+search are built and committed. Runs on the iOS simulator and installs on a physical
 device.
 
-Not built: daily prompts, export/import, FTS search, Android dictation. Nothing
-is shippable and nothing is on the App Store.
+Not built: daily prompts, export/import, Android dictation. Nothing is
+shippable and nothing is on the App Store.
 
 **Dictation has never been verified against real human speech.** Everything
 measured so far was `say`-generated audio on macOS. The app is installed on
@@ -537,6 +588,21 @@ state-level test could see, because nothing about the state was wrong.
 
 **The Simulator cannot do speech.** Do not debug "not subscribed to
 transcription.en" there. It ships no ASR assets and never will.
+
+**Check the floor, not the ceiling, and check it on the platform you do not
+use.** Search was going to be FTS5 until an API 28 emulator said `no such
+module: fts5` — on a SQLite *newer* than minSdk 26 ships. iOS and desktop both
+have fts5, so every machine in this project's normal loop would have said yes.
+The AVD took two minutes and it was the only thing in the room telling the
+truth.
+
+**Ask the generator what it can actually express before designing around it.**
+The second reason there is no FTS table is that SQLDelight 2.1.0 has no FTS
+grammar at all: it accepts `CREATE VIRTUAL TABLE ... USING fts5(...)` and then
+resolves the table to zero columns, so even `SELECT id FROM t` fails to
+compile. That is a five-minute probe — write the `.sq`, run
+`generateSqlDelightInterface` — and it would have been an afternoon to
+discover after building on the assumption.
 
 **Be careful with `git add -A`.** `-resultBundlePath` writes thousands of binary
 files; one blind add swept 933 objects into the repo. And `.gitignore` does not

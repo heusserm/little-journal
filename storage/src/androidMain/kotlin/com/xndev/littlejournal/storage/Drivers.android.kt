@@ -10,3 +10,4 @@ fun androidDriver(context: Context, name: String = "littlejournal.db"): SqlDrive
 
 fun androidRepository(context: Context, deviceId: String = "android"): JournalRepository =
     JournalRepository(JournalDatabase(androidDriver(context)), deviceId)
+        .also { it.ensureIndexed() }

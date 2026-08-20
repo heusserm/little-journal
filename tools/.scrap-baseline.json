@@ -164,15 +164,48 @@
   },
   "storage/src/jvmTest/kotlin/com/xndev/littlejournal/storage/PersistenceTest.kt": {
     "max": 7,
-    "mean": 2.29,
+    "mean": 2.33,
     "tests": {
+      "a journal written before the word index upgrades without losing anything": 4,
       "changed since returns rows in the order they were touched": 1,
       "desktopRepository opens a working file-backed journal": 7,
       "device id is recorded on entries so sync can attribute them later": 1,
       "entries survive closing and reopening the database": 1,
       "inMemoryRepository starts empty every time": 1,
+      "reopening a current database leaves the index intact": 1,
       "reopening does not duplicate or reset existing rows": 1,
       "the database file is actually created on disk": 4
+    }
+  },
+  "storage/src/jvmTest/kotlin/com/xndev/littlejournal/storage/SearchTest.kt": {
+    "max": 9,
+    "mean": 4.14,
+    "tests": {
+      "a finished term is matched exactly, not by prefix": 4,
+      "a query with no indexable characters finds nothing rather than everything": 4,
+      "a word in more entries than SQLite can bind still returns a page": 9,
+      "a word repeated in one entry still yields that entry once": 4,
+      "backfilling a journal that is already indexed leaves it working": 4,
+      "backfilling an empty journal is harmless": 4,
+      "backfilling builds the index for entries that predate it": 1,
+      "editing an entry drops the words it no longer contains": 4,
+      "results come back newest first": 4,
+      "search ignores case on both sides": 4,
+      "several terms all have to match, in any order": 4,
+      "terms match whole words, so run does not find grunt": 4,
+      "the term still being typed matches by prefix": 4,
+      "words need not be adjacent, which the old substring match required": 4
+    }
+  },
+  "storage/src/jvmTest/kotlin/com/xndev/littlejournal/storage/SearchTokensTest.kt": {
+    "max": 1,
+    "mean": 1.0,
+    "tests": {
+      "accented letters survive as letters": 1,
+      "characters that would be FTS or LIKE syntax are stripped, not escaped": 1,
+      "runs of separators do not produce empty terms": 1,
+      "text with nothing indexable yields no terms at all": 1,
+      "words are lowercased and punctuation is dropped": 1
     }
   }
 }

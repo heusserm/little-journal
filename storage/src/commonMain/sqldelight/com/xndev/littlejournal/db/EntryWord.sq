@@ -1,0 +1,59 @@
+-- Inverted index over entry bodies: one row per (entry, distinct word).
+--
+-- This is deliberately an ordinary table rather than an FTS5 virtual table.
+-- Two reasons, both discovered by trying:
+--
+--   1. SQLDelight 2.1.0 has no FTS grammar. It parses CREATE VIRTUAL TABLE
+--      ... USING fts5(...) as an opaque module invocation and resolves the
+--      table to zero columns, so *every* query against it fails to compile
+--      with "Failed to compile SqlCompoundSelectStmtImpl: []". FTS5 here
+--      would mean raw driver SQL, untyped and outside the generated API.
+--   2. Android's system SQLite has no fts5 module. Measured, not assumed:
+--      on an API 28 emulator (SQLite 3.22, newer than the 3.19 that minSdk
+--      26 ships) `CREATE VIRTUAL TABLE t USING fts5(x)` fails with
+--      "no such module: fts5", while the same statement using fts4 works.
+--      This is the same class of minSdk constraint that already rules out
+--      upsert in Entry.sq -- and note it would not have been caught by any
+--      amount of testing on iOS or desktop, where fts5 is present.
+--
+-- What FTS actually buys a journal is word-boundary matching, multi-word
+-- queries and prefix matching. All three are a join and a range scan. What it
+-- also buys -- bm25 relevance ranking -- this app does not want: a journal
+-- reads newest-first.
+--
+-- Tokenising lives in Kotlin (SearchTokens.kt) so the index and the query are
+-- built by the same function and cannot drift.
+CREATE TABLE entry_word (
+    entry_id TEXT NOT NULL,
+    word     TEXT NOT NULL,
+    PRIMARY KEY (entry_id, word)
+);
+
+-- Serves both the exact lookup and the prefix range scan below.
+CREATE INDEX entry_word_by_word ON entry_word(word);
+
+indexWord:
+INSERT OR IGNORE INTO entry_word(entry_id, word) VALUES (?, ?);
+
+clearWords:
+DELETE FROM entry_word WHERE entry_id = ?;
+
+idsWithWord:
+SELECT entry_id FROM entry_word WHERE word = ?;
+
+-- Prefix match as a bounded range, so the index does the work. A LIKE
+-- 'x%' would scan, and would need % and _ escaped out of user input.
+--
+-- The upper bound is the term plus U+FFFF rather than "last character + 1",
+-- because appending cannot overflow the way incrementing can. It is a safe
+-- sentinel rather than a usually-safe one: SQLite compares text as UTF-8
+-- bytes, U+FFFF is the largest three-byte sequence there is, and every
+-- character a token can hold is in the Basic Multilingual Plane -- tokens
+-- are letters and digits only, and supplementary-plane letters arrive as
+-- surrogate pairs, which are not letters individually and never survive
+-- tokenising.
+idsWithPrefix:
+SELECT entry_id FROM entry_word WHERE word >= ? AND word <= ?;
+
+countIndexed:
+SELECT COUNT(*) FROM entry_word;

@@ -1,0 +1,12 @@
+-- Schema 1 -> 2: add the word index behind search.
+--
+-- The table is created empty. Tokenising is a Kotlin function, not something
+-- SQL can express, so existing rows are backfilled by
+-- JournalRepository.ensureIndexed() the first time the database is opened.
+CREATE TABLE entry_word (
+    entry_id TEXT NOT NULL,
+    word     TEXT NOT NULL,
+    PRIMARY KEY (entry_id, word)
+);
+
+CREATE INDEX entry_word_by_word ON entry_word(word);

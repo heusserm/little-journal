@@ -72,6 +72,41 @@ class PersistenceTest {
         assertEquals("phone-7", repo.byId("a")?.deviceId)
     }
 
+    /**
+     * The upgrade path, end to end: a journal written against schema 1 has no
+     * word index and no `user_version` stamp. Opening it must add the table,
+     * backfill it from the entries already there, and lose nothing.
+     *
+     * Simulated by taking a current database apart: dropping the index table
+     * and winding `user_version` back to 0, which is what the real desktop
+     * `journal.db` reads today — schema 1 never stamped a version, so the
+     * repository has to read 0 as "1", not as "empty".
+     */
+    @Test
+    fun `a journal written before the word index upgrades without losing anything`() {
+        desktopRepository(path, deviceId = "d")
+            .create(id = "a", body = "the rain in spain", date = LocalDate.parse("2026-05-01"))
+
+        fileDriver(path).apply {
+            execute(null, "DROP TABLE entry_word", 0)
+            execute(null, "PRAGMA user_version = 0", 0)
+        }
+
+        val upgraded = desktopRepository(path, deviceId = "d")
+
+        assertEquals("the rain in spain", upgraded.byId("a")?.body, "the entry must survive")
+        assertEquals(listOf("a"), upgraded.search("spain").map { it.id }, "and become searchable")
+    }
+
+    /** Opening an already-current database must not re-run the migration. */
+    @Test
+    fun `reopening a current database leaves the index intact`() {
+        desktopRepository(path, deviceId = "d")
+            .create(id = "a", body = "unchanged", date = LocalDate.parse("2026-05-01"))
+
+        assertEquals(listOf("a"), desktopRepository(path, "d").search("unchanged").map { it.id })
+    }
+
     @Test
     fun `changed since returns rows in the order they were touched`() {
         val repo = JournalRepository(

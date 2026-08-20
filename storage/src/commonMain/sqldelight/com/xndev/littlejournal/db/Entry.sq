@@ -68,13 +68,33 @@ SELECT * FROM entry
 WHERE substr(entry_date, 6) = ? AND entry_date < ? AND deleted_at IS NULL
 ORDER BY entry_date DESC;
 
--- Placeholder search. Replaced by FTS5 once the schema settles; LIKE is fine
--- at journal scale (thousands of rows, not millions).
-search:
+-- Search resolves to a set of ids through entry_word, orders and caps them
+-- with liveIdsByDate below, and only then hydrates them here. Newest first,
+-- because a journal reads that way -- see EntryWord.sq for why there is no
+-- relevance ranking.
+byIds:
 SELECT * FROM entry
-WHERE body LIKE '%' || ? || '%' AND deleted_at IS NULL
-ORDER BY entry_date DESC
-LIMIT ?;
+WHERE id IN ? AND deleted_at IS NULL
+ORDER BY entry_date DESC, created_at DESC;
+
+-- Every live id in display order, so search can put its matches in order and
+-- cut them to a page before binding any of them.
+--
+-- The indirection is not for speed, it is for a hard limit: `IN ?` becomes
+-- one host parameter per id, and SQLite allows only 999 of those before
+-- 3.32 -- Android API 26 ships 3.19. Handing the raw match set to byIds
+-- works until the journal holds a thousand entries containing "the", and
+-- then it fails with "too many SQL variables" on the platform that gets
+-- tested least. Capping first means byIds never binds more than one page.
+liveIdsByDate:
+SELECT id FROM entry
+WHERE deleted_at IS NULL
+ORDER BY entry_date DESC, created_at DESC;
+
+-- Everything the word index mirrors, tombstones included, so that the index
+-- stays a faithful copy of the column rather than a view of the live subset.
+allBodies:
+SELECT id, body FROM entry;
 
 softDelete:
 UPDATE entry SET deleted_at = ?, updated_at = ? WHERE id = ?;

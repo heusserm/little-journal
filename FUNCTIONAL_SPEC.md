@@ -4,7 +4,7 @@
 implemented and verified. Anything planned but absent is listed under
 [Not implemented](#not-implemented).
 
-Last verified against commit on 2026-08-20, with 92 passing tests.
+Last verified against commit on 2026-08-20, with 130 passing tests.
 
 ---
 
@@ -99,6 +99,22 @@ Opened by tapping an entry, or by **New**.
 - Results: a count, then matching entries newest first, each showing its date.
 - Deleted entries never appear.
 
+Search matches **words**, not substrings:
+
+- Searching *run* finds "went for a run" and not "he grunted".
+- **Every term must match**, in any order and anywhere in the entry. *rain
+  spain* finds "the rain in spain"; *spain rain* finds it too.
+- The **last term matches by prefix**, because it is the one still being
+  typed — *runn* finds "running" after three keystrokes. Terms before it are
+  finished words and match exactly, so *run late* does **not** find "running
+  late".
+- Case is ignored, and punctuation is not searchable: a query of *"!!!"*
+  finds nothing rather than everything.
+
+Results are ordered newest first rather than by relevance. A journal is read
+by date, and "which entry is most about this word" is not a question its
+owner asks.
+
 ### Entry cards
 
 Used on Today, Day and Search. Each shows the body (up to four lines,
@@ -175,13 +191,15 @@ only when dictation is first used.
 
 Present in the schema or planned, but with no behaviour behind them today:
 
+- **Phrase search** — quoting a phrase searches for its words, not for the
+  phrase. *"rain in spain"* and *spain rain in* return the same entries.
+- **Relevance ranking** — results are ordered by date, not by how well they
+  match. Deliberate; see [Search](#search).
 - **Daily prompts** — `prompt_id` exists on every entry; nothing writes it.
 - **Keeping audio** — `audio_path` exists; no recording is retained.
 - **Sync** between devices, and any cloud storage.
 - **Export / import.**
 - **Encryption at rest.**
-- **Full-text search** — search is a substring match, which is fast enough at
-  journal scale.
 - **Dictation on Android or desktop.**
 - **Filtering or browsing by tag or mood** — both are stored and displayed, and
   the queries exist, but no screen uses them.

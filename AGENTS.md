@@ -10,6 +10,11 @@ Compose. Local-first, no backend, no accounts, no network.
 **Repo:** <https://github.com/heusserm/little-journal> (public)
 **Location:** `~/Code/LittleJournal`
 
+**What the app actually does today is specified in
+[`FUNCTIONAL_SPEC.md`](FUNCTIONAL_SPEC.md)** — read that before changing
+behaviour, and update it when behaviour changes. This file covers how to build
+and test; that one covers what the thing does.
+
 ---
 
 ## Layout
@@ -54,8 +59,71 @@ xcrun devicectl device install app --device <device-udid> \
   "iosApp/dd-device/Build/Products/Debug-iphoneos/Little Journal.app"
 ```
 
-Test reports: `storage/build/reports/tests/jvmTest/index.html`
 Generated SQLDelight code: `storage/build/generated/sqldelight/`
+
+## Running the tests
+
+92 tests: 87 Kotlin, 5 Swift. All of them pass; keep it that way.
+
+```bash
+# Everything Kotlin — the usual command
+./gradlew :storage:jvmTest :app:desktopTest
+
+# One suite, or one test
+./gradlew :app:desktopTest --tests "*SpokenText*"
+./gradlew :app:desktopTest --tests "*JournalStateTest.a spoken draft*"
+
+# Swift (needs a simulator; the app target builds first)
+xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -derivedDataPath iosApp/dd
+```
+
+HTML reports land in `storage/build/reports/tests/jvmTest/index.html` and
+`app/build/reports/tests/desktopTest/index.html`.
+
+### What the suites cover
+
+| Suite | Tests | Covers |
+|---|---:|---|
+| `JournalRepositoryTest` | 10 | schema behaviour: tombstones, date moves, counts |
+| `JournalRepositoryQueryTest` | 7 | ranges, tags, limits |
+| `PersistenceTest` | 5 | file-backed DB survives reopening — the only test proving a relaunch does not wipe the journal |
+| `JournalStateTest` | 17 | dictation callbacks, draft handling, time cleanup |
+| `JournalStatePagingTest` | 11 | month paging, editing, delete |
+| `SpokenTextTest` + `EdgeTest` | 16 | time correction, both directions |
+| `ScreenUiTest` | 8 | real screens rendered and driven |
+| `DayScreenUiTest` | 5 | day view and navigation into the editor |
+| `AppNavigationUiTest` | 4 | the real tab bar |
+| `HelpersTest` | 4 | tag parsing, pluralisation, date labels |
+| `IosTranscriberTests` (Swift) | 5 | buffer conversion, environment naming |
+
+UI tests use `runComposeUiTest` on the desktop target against a real in-memory
+database. `FakeTranscriber` stands in for the platform recognizer, so dictation
+logic is testable with no microphone and no device.
+
+## Coverage
+
+```bash
+./gradlew :app:koverXmlReport :storage:koverXmlReport   # XML, for tooling
+./gradlew :app:koverHtmlReport                          # readable report
+
+# Swift
+xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -derivedDataPath iosApp/dd -enableCodeCoverage YES \
+  -resultBundlePath iosApp/cov.xcresult
+xcrun xccov view --report --json iosApp/cov.xcresult
+```
+
+Kotlin is at **93% line / 72% branch**. Generated SQLDelight output is excluded
+from the report; counting it flatters storage and hides gaps elsewhere.
+
+**`IosTranscriber.swift` is 14% covered and that is the real risk in this
+project.** Only `convert` and `environmentNote` can be exercised — everything
+else touches `SpeechAnalyzer` or `AVAudioEngine`, neither of which runs in the
+Simulator. It is simultaneously the most complex file and the least verified
+one. Treat changes there with more care than the coverage number suggests.
 
 **Desktop dev database:** `~/Code/LittleJournal/journal.db` (gitignored). The
 path is printed at startup. Override with `-Dlittlejournal.db=/path`. Inspect

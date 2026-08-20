@@ -63,9 +63,22 @@ xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug 
   -allowProvisioningUpdates build
 xcrun devicectl device install app --device <device-udid> \
   "iosApp/dd-device/Build/Products/Debug-iphoneos/Little Journal.app"
+
+# Android on an emulator -- the only way to exercise the oldest SQLite
+~/Library/Android/sdk/emulator/emulator -avd Pixel_5_API_28 -no-window -no-audio &
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n com.xndev.littlejournal/.app.MainActivity
+adb shell "run-as com.xndev.littlejournal sqlite3 databases/littlejournal.db 'PRAGMA user_version;'"
 ```
 
 Generated SQLDelight code: `storage/build/generated/sqldelight/`
+
+**Driving the Android UI:** `uiautomator dump` fails with "could not get idle
+state" against Compose — the caret never stops blinking, so the UI is never
+idle. Use `adb shell screencap` and read the picture instead. And dismiss the
+keyboard with `input keyevent 4` before tapping the tab bar, or the tap lands
+on the keyboard.
 
 ## Running everything
 
@@ -614,6 +627,22 @@ device.
 
 Not built: daily prompts, export/import, Android dictation. Nothing is
 shippable and nothing is on the App Store.
+
+**Android was run for the first time on 2026-08-20**, on an API 28 emulator —
+the oldest available, and the closest thing to the minSdk 26 floor. It had
+never been launched before, only compiled. It works: the app starts with no
+`ClassNotFoundException`, the Talk button is correctly absent and the
+placeholder reads "What happened today?", an entry saves and indexes, and
+search matches whole words and multiple terms. A planted schema-1 database
+migrated to 2, kept both entries and backfilled 16 words, and a prefix search
+for "kayak" found the migrated "Kayaking on the loch" through the real UI.
+
+Two things that only Android could have told us, both of which held: SQLite
+3.22 accepts the empty `IN ()` that a no-results search produces, and the
+`AndroidSqliteDriver` upgrade path runs `1.sqm` correctly. Note the Android
+database stamps `user_version = 1` on create, where the desktop one stamped 0
+— which is why `fileDriver` reads 0 as 1 and the Android driver needs no such
+rule.
 
 **Dictation has never been verified against real human speech.** Everything
 measured so far was `say`-generated audio on macOS. The app is installed on

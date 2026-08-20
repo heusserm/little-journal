@@ -46,49 +46,22 @@ fun EditorScreen(state: JournalState, initialDate: LocalDate, existing: JournalE
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = { state.back() }) { Text("‹ Back") }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (existing != null) {
-                    TextButton(onClick = {
-                        state.delete(existing.id)
-                        state.back()
-                    }) { Text("Delete") }
-                }
-                Button(
-                    onClick = {
-                        state.save(body, date, existing?.id, mood, parseTags(tagText))
-                        state.back()
-                    },
-                    enabled = body.isNotBlank(),
-                ) { Text("Save") }
-            }
-        }
+        EditorToolbar(
+            canSave = body.isNotBlank(),
+            existing = existing,
+            onBack = state::back,
+            onDelete = { existing?.let { state.delete(it.id); state.back() } },
+            onSave = {
+                state.save(body, date, existing?.id, mood, parseTags(tagText))
+                state.back()
+            },
+        )
 
         Text("Entry date", style = MaterialTheme.typography.labelMedium)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            TextButton(onClick = { date = date.plus(-1, DateTimeUnit.DAY) }) { Text("‹") }
-            Text(date.longLabel(), style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = { date = date.plus(1, DateTimeUnit.DAY) }) { Text("›") }
-            TextButton(onClick = { date = todayLocal() }) { Text("Today") }
-        }
-        if (existing != null && date != existing.entryDate) {
-            Text(
-                "Moving from ${existing.entryDate.longLabel()}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        DateStepper(date = date, onChange = { date = it })
+        MovedFromNote(existing = existing, current = date)
 
         Spacer(Modifier.height(12.dp))
-
         OutlinedTextField(
             value = body,
             onValueChange = { body = it },
@@ -97,20 +70,10 @@ fun EditorScreen(state: JournalState, initialDate: LocalDate, existing: JournalE
         )
 
         Spacer(Modifier.height(12.dp))
-
         Text("Mood", style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            (1..5).forEach { value ->
-                FilterChip(
-                    selected = mood == value,
-                    onClick = { mood = if (mood == value) null else value },
-                    label = { Text(value.toString()) },
-                )
-            }
-        }
+        MoodRow(mood = mood, onSelect = { mood = it })
 
         Spacer(Modifier.height(12.dp))
-
         OutlinedTextField(
             value = tagText,
             onValueChange = { tagText = it },
@@ -118,8 +81,68 @@ fun EditorScreen(state: JournalState, initialDate: LocalDate, existing: JournalE
             label = { Text("Tags, comma separated") },
             singleLine = true,
         )
-
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun EditorToolbar(
+    canSave: Boolean,
+    existing: JournalEntry?,
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+    onSave: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onBack) { Text("‹ Back") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (existing != null) {
+                TextButton(onClick = onDelete) { Text("Delete") }
+            }
+            Button(onClick = onSave, enabled = canSave) { Text("Save") }
+        }
+    }
+}
+
+@Composable
+private fun DateStepper(date: LocalDate, onChange: (LocalDate) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        TextButton(onClick = { onChange(date.plus(-1, DateTimeUnit.DAY)) }) { Text("‹") }
+        Text(date.longLabel(), style = MaterialTheme.typography.bodyLarge)
+        TextButton(onClick = { onChange(date.plus(1, DateTimeUnit.DAY)) }) { Text("›") }
+        TextButton(onClick = { onChange(todayLocal()) }) { Text("Today") }
+    }
+}
+
+/** Only shown once the date has actually been changed away from the stored one. */
+@Composable
+private fun MovedFromNote(existing: JournalEntry?, current: LocalDate) {
+    val from = existing?.entryDate ?: return
+    if (from == current) return
+    Text(
+        "Moving from ${from.longLabel()}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun MoodRow(mood: Int?, onSelect: (Int?) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        (1..5).forEach { value ->
+            FilterChip(
+                selected = mood == value,
+                onClick = { onSelect(if (mood == value) null else value) },
+                label = { Text(value.toString()) },
+            )
+        }
     }
 }
 

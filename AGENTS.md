@@ -455,6 +455,57 @@ is shippable and nothing is on the App Store.
 measured so far was `say`-generated audio on macOS. The app is installed on
 Matt's iPhone 17 Pro awaiting that test.
 
+## Advice
+
+Earned the hard way on this codebase. Each of these cost a build cycle or a
+wrong answer.
+
+**Disbelieve your own tooling until it agrees with ground truth.** `scrap.py`
+reported 109 tests when the runner reported 110 — a parser bug that made a
+helper swallow a test. A test-quality tool that cannot find all the tests is
+worthless, and nothing about its output looked wrong. Whenever a tool counts
+something, find an independent count and compare.
+
+**A broken analyzer is worse than a missing one.** `:app:lint` failed silently
+for the whole life of this project, and its silence read like approval. The
+first run after fixing it found a manifest bug that would have crashed the
+Android app on launch, past 110 tests and 95% coverage.
+
+**Coverage going down can mean the code got better.** Swift coverage fell 54% →
+38.6% when the start/stop race was fixed, because the buggy version was
+executing startup code after `stop()`. Chasing the number back up would mean
+reintroducing the bug.
+
+**A test that cannot fail is worse than no test.** Four "does not crash" tests
+had no assertions and would have passed against an empty stub. Giving one a
+real post-condition made it crash immediately and exposed a genuine race.
+
+**Fix the code, not the assertion.** `AVAudioConverter` returned 1360 frames
+where arithmetic said 1600. The fix was not a wider tolerance; it was pinning
+the property that actually matters and recording *why* the naive number is
+wrong.
+
+**Tune a linter before trusting it.** detekt out of the box reported 108 issues
+here, ~80% of them Compose conventions. A tool that cries wolf gets ignored, and
+then it protects nothing. Both config files record *why* each deviation exists.
+
+**Run the app, not only the tests.** The desktop target exposed the month grid
+overlapping its own final week within seconds of first launch — a defect no
+state-level test could see, because nothing about the state was wrong.
+
+**The Simulator cannot do speech.** Do not debug "not subscribed to
+transcription.en" there. It ships no ASR assets and never will.
+
+**Be careful with `git add -A`.** `-resultBundlePath` writes thousands of binary
+files; one blind add swept 933 objects into the repo. And `.gitignore` does not
+untrack what is already tracked.
+
+**Write down why, not just what.** The comment on `onThisDay` records that
+Kotlin's `substring` is 0-based and SQLite's `substr` is 1-based, so the same
+offset appears as 5 in Kotlin and 6 in `Entry.sq`. A linter flagged a magic
+number; the real finding was a cross-language coupling that would break
+silently.
+
 ## Related conventions
 
 App Store work for Matt's other apps follows `~/Code/AppStoreListings/STATUS.md`

@@ -1,0 +1,88 @@
+-- One journal entry.
+--
+-- entry_date is the day the entry is ABOUT. created_at is when it was written.
+-- Keeping those separate is the whole reason you can sit down on Thursday and
+-- backfill Tuesday, and it is what the calendar view groups on.
+--
+-- id / updated_at / deleted_at / device_id exist purely so sync can be added
+-- later without migrating real users' data. Nothing reads them yet:
+--   * id is a UUID, not an autoincrement -- two offline devices both minting
+--     "id 7" would be unmergeable.
+--   * deleted_at is a tombstone. A deleted row must sync as "deleted" rather
+--     than simply vanishing, or it reappears from the other device.
+CREATE TABLE entry (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    entry_date  TEXT    NOT NULL,               -- ISO-8601 local date, 'YYYY-MM-DD'
+    created_at  INTEGER NOT NULL,               -- epoch millis
+    updated_at  INTEGER NOT NULL,               -- epoch millis
+    deleted_at  INTEGER,                        -- epoch millis, NULL = live
+    device_id   TEXT    NOT NULL,
+    body        TEXT    NOT NULL,
+    mood        INTEGER,                        -- NULL = untagged
+    prompt_id   TEXT,                           -- which daily prompt this answered
+    audio_path  TEXT,                           -- kept recording, if any
+    source      TEXT    NOT NULL DEFAULT 'typed'  -- 'typed' | 'dictated'
+);
+
+CREATE INDEX entry_by_date    ON entry(entry_date);
+CREATE INDEX entry_by_updated ON entry(updated_at);
+
+-- INSERT OR REPLACE rather than the tidier ON CONFLICT ... DO UPDATE, because
+-- upsert needs SQLite 3.24+ and Android API 26 ships 3.19. Do not "modernise"
+-- this without also raising minSdk to 29.
+--
+-- Safe here only because every column is supplied on every write: REPLACE
+-- deletes the old row first, so a partial column list would silently blank
+-- created_at. JournalRepository.save is the single writer and always carries
+-- the full row.
+upsert:
+INSERT OR REPLACE INTO entry(id, entry_date, created_at, updated_at, deleted_at, device_id, body, mood, prompt_id, audio_path, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectById:
+SELECT * FROM entry WHERE id = ? AND deleted_at IS NULL;
+
+-- Every live entry for one day, oldest first. A day holds many entries.
+selectForDate:
+SELECT * FROM entry
+WHERE entry_date = ? AND deleted_at IS NULL
+ORDER BY created_at ASC;
+
+-- Backs the calendar's day detail and the month scroll.
+selectInRange:
+SELECT * FROM entry
+WHERE entry_date BETWEEN ? AND ? AND deleted_at IS NULL
+ORDER BY entry_date ASC, created_at ASC;
+
+-- Backs the density dots on the calendar grid: one row per day that has entries.
+countsInRange:
+SELECT entry_date, COUNT(*) AS entry_count
+FROM entry
+WHERE entry_date BETWEEN ? AND ? AND deleted_at IS NULL
+GROUP BY entry_date;
+
+-- "On this day": same month and day, any earlier year. entry_date is
+-- 'YYYY-MM-DD', so characters 6.. are 'MM-DD'.
+onThisDay:
+SELECT * FROM entry
+WHERE substr(entry_date, 6) = ? AND entry_date < ? AND deleted_at IS NULL
+ORDER BY entry_date DESC;
+
+-- Placeholder search. Replaced by FTS5 once the schema settles; LIKE is fine
+-- at journal scale (thousands of rows, not millions).
+search:
+SELECT * FROM entry
+WHERE body LIKE '%' || ? || '%' AND deleted_at IS NULL
+ORDER BY entry_date DESC
+LIMIT ?;
+
+softDelete:
+UPDATE entry SET deleted_at = ?, updated_at = ? WHERE id = ?;
+
+-- The hook sync will need: everything touched since a watermark, tombstones
+-- included.
+changedSince:
+SELECT * FROM entry WHERE updated_at > ? ORDER BY updated_at ASC;
+
+countLive:
+SELECT COUNT(*) FROM entry WHERE deleted_at IS NULL;

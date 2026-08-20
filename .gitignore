@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+
+# iOS / Xcode
+**/xcuserdata/
+DerivedData/
+iosApp/build/
+
+# OS
+.DS_Store
+
+# Kotlin Multiplatform scratch
+.kotlin/

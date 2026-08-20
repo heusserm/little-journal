@@ -1,0 +1,33 @@
+-- Tags are a separate table rather than a comma-joined column so that
+-- "show me everything tagged work" is an index lookup instead of a scan.
+CREATE TABLE entry_tag (
+    entry_id TEXT NOT NULL,
+    tag      TEXT NOT NULL,
+    PRIMARY KEY (entry_id, tag)
+);
+
+CREATE INDEX entry_tag_by_tag ON entry_tag(tag);
+
+addTag:
+INSERT OR IGNORE INTO entry_tag(entry_id, tag) VALUES (?, ?);
+
+removeTag:
+DELETE FROM entry_tag WHERE entry_id = ? AND tag = ?;
+
+clearTags:
+DELETE FROM entry_tag WHERE entry_id = ?;
+
+tagsFor:
+SELECT tag FROM entry_tag WHERE entry_id = ? ORDER BY tag ASC;
+
+entriesWithTag:
+SELECT e.* FROM entry e
+JOIN entry_tag t ON t.entry_id = e.id
+WHERE t.tag = ? AND e.deleted_at IS NULL
+ORDER BY e.entry_date DESC;
+
+allTags:
+SELECT tag, COUNT(*) AS usage_count
+FROM entry_tag
+GROUP BY tag
+ORDER BY usage_count DESC, tag ASC;

@@ -3,7 +3,7 @@
     <application
         android:label="Little Journal"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+        android:theme="@style/Theme.LittleJournal">
         <activity
             android:name=".MainActivity"
             android:exported="true"

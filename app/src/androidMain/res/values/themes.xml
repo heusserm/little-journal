@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Platform theme, not AppCompat: Compose draws the entire UI, so the only
+      thing this needs to get right is the window background behind it before
+      the first frame. Depending on AppCompat purely for a theme name would be
+      a dependency for nothing.
+    -->
+    <style name="Theme.LittleJournal" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/journal_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

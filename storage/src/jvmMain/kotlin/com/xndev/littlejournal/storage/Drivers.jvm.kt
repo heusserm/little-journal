@@ -23,3 +23,10 @@ fun fileDriver(path: String): SqlDriver {
  */
 fun desktopRepository(path: String, deviceId: String = "desktop"): JournalRepository =
     JournalRepository(JournalDatabase(fileDriver(path)), deviceId)
+
+/**
+ * Throwaway repository backed by an in-memory database. For tests, so callers
+ * never have to know about SqlDriver or the generated database type.
+ */
+fun inMemoryRepository(deviceId: String = "test-device"): JournalRepository =
+    JournalRepository(JournalDatabase(inMemoryDriver()), deviceId)

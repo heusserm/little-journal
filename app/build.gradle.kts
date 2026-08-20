@@ -2,6 +2,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     kotlin("multiplatform")
+    id("org.jetbrains.kotlinx.kover")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
@@ -70,4 +71,16 @@ compose.desktop {
 // the project directory rather than wherever Gradle happens to be.
 tasks.withType<JavaExec>().configureEach {
     workingDir = rootProject.projectDir
+}
+
+// Generated SQLDelight code is not ours to test; counting it flatters the
+// storage number and hides the UI having no coverage at all.
+kover {
+    reports {
+        filters {
+            excludes {
+                packages("com.xndev.littlejournal.db")
+            }
+        }
+    }
 }

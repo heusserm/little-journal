@@ -1,5 +1,6 @@
 plugins {
     kotlin("multiplatform")
+    id("org.jetbrains.kotlinx.kover")
     id("com.android.library")
     id("app.cash.sqldelight")
 }
@@ -55,5 +56,17 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// Generated SQLDelight code is not ours to test; counting it flatters the
+// storage number and hides the UI having no coverage at all.
+kover {
+    reports {
+        filters {
+            excludes {
+                packages("com.xndev.littlejournal.db")
+            }
+        }
     }
 }

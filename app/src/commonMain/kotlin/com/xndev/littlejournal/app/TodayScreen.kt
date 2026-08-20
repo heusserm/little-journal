@@ -129,7 +129,7 @@ private fun LazyListScope.entryCards(
     }
 }
 
-private fun countLabel(entries: List<JournalEntry>, prefix: String): String {
+internal fun countLabel(entries: List<JournalEntry>, prefix: String): String {
     val noun = if (entries.size == 1) "entry" else "entries"
     return "$prefix, ${entries.size} $noun"
 }

@@ -344,13 +344,28 @@ numbers; every one of them is reproducible from `tools/`.
 | SwiftLint | **0** |
 | Android Lint | 4 warnings, all "newer version available" |
 
-**Per-function detail — every function's size, complexity, coverage, CRAP and
-referencing tests, plus every test's SCRAP — is in
-[`HEALTH.md`](HEALTH.md)**, regenerated with:
+**Per-function detail — every function's size, complexity, coverage, CRAP, and
+the test classes that actually execute it, plus every test's SCRAP — is in
+[`HEALTH.md`](HEALTH.md)**:
 
 ```bash
+python3 tools/attribute.py          # slow: one build per test class
 python3 tools/health.py > HEALTH.md
 ```
+
+`attribute.py` runs each test class in isolation under coverage, so the
+"exercised by" column is real execution attribution rather than grepping for
+the function's name. Name matching was the first attempt and was misleading:
+`DayCell` is fully covered by four suites and mentioned by none of them.
+
+It only needs re-running when tests are added or renamed; the result is cached
+in `tools/.attribution.json`.
+
+**Trap:** each per-class run overwrites the module's Kover report, so the last
+one leaves a single class's coverage behind. `attribute.py` restores the
+aggregate before it exits — if you interrupt it, re-run the full
+`koverXmlReport` or everything downstream will read near-zero coverage and
+report nonsense.
 
 Where the risk actually is, in one place:
 

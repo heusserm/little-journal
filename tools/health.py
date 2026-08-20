@@ -41,6 +41,7 @@ def load(name):
 
 
 scrap = load("scrap")
+parse = load("parse")
 
 PROD_GLOBS = ["app/src/commonMain/**/*.kt", "app/src/androidMain/**/*.kt",
               "app/src/iosMain/**/*.kt", "app/src/desktopMain/**/*.kt",
@@ -49,36 +50,9 @@ PROD_GLOBS = ["app/src/commonMain/**/*.kt", "app/src/androidMain/**/*.kt",
               "iosApp/iosApp/*.swift"]
 TEST_GLOBS = scrap.DEFAULT_GLOBS
 
-FUNC = re.compile(r'^\s*(?:@\w+\s+)*(?:public |private |internal |protected |override |suspend |inline |final |static |open |fileprivate |fun |func )*\b(?:fun|func)\s+([A-Za-z_]\w*)')
-DECISION = re.compile(r'\bif\b|\bfor\b|\bwhile\b|\bcatch\b|&&|\|\||\?:')
-
-
 def functions(path):
-    src = scrap.strip_comments(path.read_text(errors='ignore').splitlines())
-    out, i = [], 0
-    while i < len(src):
-        m = FUNC.match(src[i])
-        if not m:
-            i += 1
-            continue
-        lines, end = scrap.body_of(src, i)
-        text = "\n".join(lines)
-        cx = 1 + len(DECISION.findall(text))
-        for wm in re.finditer(r'\bwhen\b\s*(\([^)]*\))?\s*\{', text):
-            k, d = wm.end() - 1, 0
-            while k < len(text):
-                if text[k] == '{':
-                    d += 1
-                elif text[k] == '}':
-                    d -= 1
-                    if d == 0:
-                        break
-                k += 1
-            cx += text[wm.end():k].count('->')
-        out.append({"name": m.group(1), "file": str(path), "line": i + 1,
-                    "loc": sum(1 for l in lines if l.strip()), "cx": cx})
-        i = end + 1
-    return out
+    """Delegates to tools/parse.py, which owns the one brace matcher."""
+    return parse.functions(path)
 
 
 def coverage():
@@ -187,7 +161,7 @@ def main():
         if len(f["suites"]) > 3:
             by += f" +{len(f['suites']) - 3}"
         print(f"| {cr} | {f['cx']} | {f['loc']} | {c} | {len(f['suites'])} | "
-              f"`{f['name']}` <br><sub>{short(f['file'])}</sub> | {by or '—'} |")
+              f"`{f['shown']}` <br><sub>{short(f['file'])}</sub> | {by or '—'} |")
 
     print("\n## Test functions\n")
     print(f"**{len(scrap_rows)} tests** · "

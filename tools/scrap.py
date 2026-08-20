@@ -50,6 +50,9 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from parse import FUNC, body_of, declaration, strip_comments  # noqa: E402
+
 DEFAULT_GLOBS = ["app/src/*Test/**/*.kt", "storage/src/*Test/**/*.kt",
                  "iosApp/iosAppTests/*.swift"]
 BASELINE = Path("tools/.scrap-baseline.json")
@@ -73,59 +76,9 @@ BRANCH = re.compile(r'\b(if|when|for|while|guard)\b|&&|\|\||\?:|\bcatch\b')
 SCOPING = re.compile(r'\b(let|run|apply|also|with|forEach|repeat|setContent|runComposeUiTest)\s*[\({]')
 FAKE = re.compile(r'\b(Fake\w*|Mock\w*|Stub\w*|object\s*:)\b')
 TEMP = re.compile(r'\b(createTempFile|createTempDir|Thread|Runtime|ProcessBuilder|FileManager\.default)\b')
-FUNC = re.compile(r'^\s*(?:override\s+|private\s+|internal\s+|public\s+|fileprivate\s+)*(?:fun|func)\s+(`[^`]+`|[A-Za-z_]\w*)')
 TESTANNO = re.compile(r'@Test\b')
 IDENT = re.compile(r'[A-Za-z_]\w*')
 BIGSTRING = re.compile(r'"[^"\n]{60,}"')   # [^"] alone spans newlines and matches the gap between literals
-
-
-def strip_comments(lines):
-    out, blk = [], False
-    for ln in lines:
-        s = ln
-        if blk:
-            if '*/' in s:
-                s, blk = s.split('*/', 1)[1], False
-            else:
-                out.append("")
-                continue
-        if '/*' in s:
-            b, _, a = s.partition('/*')
-            s, blk = (b + a.split('*/', 1)[1], False) if '*/' in a else (b, True)
-        out.append(re.sub(r'//.*', '', s))
-    return out
-
-
-def body_of(src, i):
-    """Body starting at the signature line i. Returns (lines, last_index).
-
-    Handles both braced bodies and expression bodies. Expression bodies have no
-    braces at all and may wrap across lines:
-
-        private fun freshState(canDictate: Boolean = true) =
-            JournalState(inMemoryRepository(), FakeTranscriber(...))
-
-    Naive brace matching runs past those to the next `{` it can find, which is
-    the following test — so the helper swallows a test and it vanishes from the
-    report. Scan forward for the opening brace, but give up if another
-    declaration or annotation appears first.
-    """
-    j = i
-    while j < len(src) and '{' not in src[j]:
-        if j > i and (FUNC.match(src[j]) or src[j].strip().startswith('@')):
-            return src[i:j], j - 1
-        j += 1
-    if j >= len(src):
-        return src[i:], len(src) - 1
-
-    depth, out = 0, []
-    for k in range(i, len(src)):
-        out.append(src[k])
-        if k >= j:
-            depth += src[k].count('{') - src[k].count('}')
-            if depth == 0:
-                return out, k
-    return out, len(src) - 1
 
 
 def parse_file(path):
@@ -135,11 +88,11 @@ def parse_file(path):
     tests, helpers = [], {}
     i = 0
     while i < len(src):
-        m = FUNC.match(src[i])
-        if not m:
+        decl = declaration(src[i])
+        if not decl:
             i += 1
             continue
-        name = m.group(1).strip('`')
+        name = decl[1]
         annotated = any(TESTANNO.search(src[k]) for k in range(max(0, i - 4), i))
         lines, end = body_of(src, i)
         inner = [l.strip() for l in lines[1:-1] if l.strip()]

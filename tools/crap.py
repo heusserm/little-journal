@@ -25,53 +25,7 @@ import json, re, subprocess, sys, xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-FUNC = re.compile(r'^\s*(?:@\w+\s+)*(?:public |private |internal |protected |override |suspend |inline |final |static |open |fun |func )*\b(?:fun|func)\s+([A-Za-z_]\w*)')
-DECISION = re.compile(r'\bif\b|\bfor\b|\bwhile\b|\bcatch\b|&&|\|\||\?:')
-
-def strip_comments(lines):
-    out, blk = [], False
-    for ln in lines:
-        s = ln
-        if blk:
-            if '*/' in s: s = s.split('*/',1)[1]; blk = False
-            else: continue
-        if '/*' in s:
-            b,_,a = s.partition('/*')
-            if '*/' in a: s = b + a.split('*/',1)[1]
-            else: s = b; blk = True
-        out.append(re.sub(r'//.*','',s))
-    return out
-
-def analyze(path):
-    src = strip_comments(path.read_text(errors='ignore').splitlines())
-    res, i = [], 0
-    while i < len(src):
-        m = FUNC.match(src[i])
-        if not m: i += 1; continue
-        j, opened, depth, body = i, False, 0, []
-        while j < len(src):
-            line = src[j]; body.append(line)
-            for ch in line:
-                if ch == '{': depth += 1; opened = True
-                elif ch == '}': depth -= 1
-            if opened and depth == 0: break
-            if not opened and j == i and re.search(r'\)\s*(:\s*[\w<>?., ]+)?\s*=\s*\S', line): break
-            if not opened and j > i and re.search(r'=\s*\S', line): break
-            j += 1
-        text = '\n'.join(body)
-        cx = 1 + len(DECISION.findall(text))
-        for wm in re.finditer(r'\bwhen\b\s*(\([^)]*\))?\s*\{', text):
-            k, d = wm.end()-1, 0
-            while k < len(text):
-                if text[k] == '{': d += 1
-                elif text[k] == '}':
-                    d -= 1
-                    if d == 0: break
-                k += 1
-            cx += text[wm.end():k].count('->')
-        res.append((m.group(1), sum(1 for b in body if b.strip()), cx))
-        i = j + 1
-    return res
+from parse import functions  # noqa: E402
 
 # ---- coverage: Kotlin
 cov = {}
@@ -109,10 +63,10 @@ for pat in ("app/src/**/*.kt", "storage/src/**/*.kt", "iosApp/iosApp/*.swift"):
     for p in sorted(Path('.').glob(pat)):
         s = str(p)
         if '/build/' in s or '/dd' in s or 'Test' in s: continue
-        for name, loc, cx in analyze(p):
-            c = cov.get((p.name, name))
+        for fn in functions(p):
+            c = cov.get((p.name, fn["name"]))
             pct = (100.0*c[0]/(c[0]+c[1]) if c and (c[0]+c[1]) else None)
-            rows.append((cx, loc, pct, name, s))
+            rows.append((fn["cx"], fn["loc"], pct, fn["shown"], s))
 
 def crap(cx, pct):
     """CRAP = comp^2 * (1 - cov)^3 + comp.  <=30 is the conventional pass mark."""
@@ -122,6 +76,10 @@ def crap(cx, pct):
     return cx ** 2 * (1 - cov) ** 3 + cx
 
 scored = [(crap(cx, pct), cx, loc, pct, name, f) for cx, loc, pct, name, f in rows]
+# Anything the coverage reports do not mention is held back rather than
+# dropped. Silently deleting it would shrink the denominator and hide the gap,
+# which is the failure mode this tool exists to catch in other people's code.
+unscored = [r for r in scored if r[0] is None]
 scored = [r for r in scored if r[0] is not None]
 scored.sort(key=lambda r: -r[0])
 
@@ -136,3 +94,11 @@ over = [r for r in scored if r[0] > 30]
 watch = [r for r in scored if 10 < r[0] <= 30]
 print(f"{len(scored)} methods scored | mean CRAP {sum(r[0] for r in scored)/len(scored):.1f} | "
       f"max {max(r[0] for r in scored):.1f} | {len(over)} over 30 | {len(watch)} between 10 and 30")
+
+if unscored:
+    print()
+    print(f"{len(unscored)} parsed but absent from the coverage reports -- not scored above:")
+    for _, cx, loc, _, name, f in sorted(unscored, key=lambda r: r[4]):
+        print(f"       cx {cx:>3} loc {loc:>4}  {name:<28} {f}")
+    print("Expected for code Kover excludes. Anything else here is a parser or")
+    print("a coverage gap, and the number above is measuring less than you think.")

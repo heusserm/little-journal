@@ -33,3 +33,8 @@ iosApp/iosApp.xcodeproj/
 # Xcode result bundles from -resultBundlePath
 iosApp/cov.xcresult/
 iosApp/*.xcresult/
+
+# Python bytecode caches. One of these was committed by accident; .gitignore
+# alone does not untrack what is already tracked, so it was git rm --cached.
+__pycache__/
+*.pyc

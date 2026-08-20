@@ -216,7 +216,8 @@ xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
 python3 tools/crap.py
 ```
 
-**As of 2026-08-20: 88 methods scored, mean 2.3, max 20.0, none over 30.**
+**As of 2026-08-20: 109 methods scored, mean 2.1, max 20.0, none over 30**,
+plus 7 listed as unscorable.
 
 Everything scoring above 2 — the rest are at or below their own complexity and
 need no attention:
@@ -227,7 +228,7 @@ need no attention:
 | **20.0** | 4 | 17 | 0% | `pump` | IosTranscriber.swift |
 | 6.0 | 6 | 9 | 100% | `CurrentScreen` | App.kt |
 | 6.0 | 6 | 39 | 100% | `SearchScreen` | SearchScreen.kt |
-| 6.0 | 2 | 11 | 0% | `databasePath` | main.kt (desktop) |
+| 6.0 | 2 | 3 | 0% | `databasePath` | main.kt (desktop) |
 | 4.2 | 4 | 7 | 75% | `back` | JournalState.kt |
 | 4.0 | 4 | 33 | 100% | `DayCell` | CalendarScreen.kt |
 | 4.0 | 4 | 42 | 100% | `EditorScreen` | EditorScreen.kt |
@@ -235,25 +236,39 @@ need no attention:
 | 4.0 | 4 | 19 | 100% | `save` | JournalState.kt |
 | 3.7 | 2 | 12 | 25% | `begin` | IosTranscriber.swift |
 | 3.6 | 3 | 21 | 59% | `authorize` | IosTranscriber.swift |
+| 3.2 | 2 | 5 | 33% | `LazyListScope.memoriesSection` | TodayScreen.kt |
 | 3.0 | 3 | 53 | 100% | `CalendarScreen` | CalendarScreen.kt |
+| 3.0 | 3 | 36 | 100% | `EntryCard` | Components.kt |
 | 3.0 | 3 | 28 | 100% | `DayScreen` | DayScreen.kt |
 | 3.0 | 3 | 9 | 100% | `MovedFromNote` | EditorScreen.kt |
 | 3.0 | 3 | 11 | 100% | `MoodRow` | EditorScreen.kt |
 | 3.0 | 3 | 7 | 100% | `onFinal` | JournalState.kt |
-| 3.0 | 3 | 3 | 100% | `isClock` | SpokenText.kt |
 | 3.0 | 3 | 16 | 100% | `LiveTranscript` | TodayScreen.kt |
 | 3.0 | 3 | 16 | 100% | `CaptureActions` | TodayScreen.kt |
 | 3.0 | 3 | 11 | 100% | `search` | JournalRepository.kt |
 | 3.0 | 3 | 8 | 100% | `ensureIndexed` | JournalRepository.kt |
 | 3.0 | 3 | 13 | 100% | `fileDriver` | Drivers.jvm.kt |
 
-**`crap.py` under-counts.** It reports 88 methods where `health.py` finds 112,
-because its brace matching merges adjacent expression-bodied functions —
-`idsStartingWith` is swallowed into `idsExactly` and reported as its line
-count, and `forDate`, `withTag` and the extension functions never appear at
-all. Same class of parser bug as the one `scrap.py` had. It understates the
-denominator; it does not distort any score, since every merged function is
-complexity 1 and fully covered. `HEALTH.md` is the more complete list.
+**The analyzers share one parser, in `tools/parse.py`.** They used to carry
+three copies of it, and all three were wrong somewhere the others were right:
+`crap.py` never got the fix that stopped a declaration swallowing the next one,
+so `idsExactly` ate `idsStartingWith` and `byId` ate `forDate`; `scrap.py`
+checked for a brace before checking for the next declaration, so
+`fun main() = application {` was read as the previous function's body and
+`main` fell out of HEALTH.md entirely; and `crap.py` ended an expression body
+at the first `= value`, which is also what a defaulted parameter looks like, so
+`create` was measured at 5 lines instead of 27 and its complexity came from a
+fifth of the function. Extension functions were captured under the receiver's
+name, so `Instant.truncatedToMillis` was looked up as `Instant`, missed, and
+silently dropped.
+
+Three tools disagreeing about how many functions the project has is the tell
+that the counting is the problem. Do not add a fourth copy.
+
+`crap.py` also now prints what it *could not* score rather than deleting it —
+seven functions live in iOS-only source or are interface declarations Kover
+never mentions. A tool that shrinks its own denominator to stay tidy is the
+failure mode these tools exist to catch.
 
 **`pump` is the one worth knowing about.** It drains recognizer results and
 dispatches them to the app, it is completely untested, and with
@@ -264,7 +279,7 @@ way the UI can see — text arriving twice, partials never settling, results
 lost — start there.
 
 `databasePath` scores 6 on complexity 2 purely because it is uncovered; it is
-eleven lines of desktop-only path resolution and not worth chasing.
+three lines of desktop-only path resolution and not worth chasing.
 
 `begin` and `authorize` are partly covered for the same reason as everything
 else in `IosTranscriber.swift`: the Simulator has no speech assets, so the
@@ -373,13 +388,13 @@ numbers; every one of them is reproducible from `tools/`.
 
 | Metric | Value |
 |---|---|
-| Production methods | 112, across 952 lines |
+| Production methods | 116, across 947 lines |
 | Tests | **131** — 121 Kotlin, 10 Swift |
 | Assertions | 220, 1.7 per test |
 | Kotlin line coverage | **95.8%** (643/671) |
 | Kotlin branch coverage | 77.8% (249/320) |
 | Swift line coverage | 38.6% (90/233) |
-| CRAP | mean **2.3**, max 20.0, **none over 30** |
+| CRAP | mean **2.1**, max 20.0, **none over 30** |
 | SCRAP | mean **5.6** (healthy), worst 25 |
 | Duplication | 1.7% (16 redundant lines) |
 | detekt | **0** |

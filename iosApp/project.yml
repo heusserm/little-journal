@@ -57,6 +57,11 @@ targets:
         # PRODUCT_NAME has a space, so the default TEST_HOST path is wrong.
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Little Journal.app/Little Journal"
         BUNDLE_LOADER: "$(TEST_HOST)"
+        # Tests touch Kotlin-declared types (TranscriberListener), which live in
+        # the ComposeApp framework rather than the app module.
+        FRAMEWORK_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/../app/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
         DEVELOPMENT_TEAM: A69JRS6V57
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES

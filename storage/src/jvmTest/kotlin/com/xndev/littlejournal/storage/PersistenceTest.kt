@@ -90,3 +90,28 @@ class PersistenceTest {
         )
     }
 }
+
+/** The convenience wrapper the desktop app actually calls. */
+class DesktopRepositoryTest {
+
+    @Test
+    fun `desktopRepository opens a working file-backed journal`() {
+        val f = File.createTempFile("lj-desktop", ".db").also { it.delete() }
+        try {
+            val repo = desktopRepository(f.absolutePath, deviceId = "mac")
+            repo.create(id = "a", body = "from the desktop", date = LocalDate.parse("2026-07-04"))
+
+            assertEquals("from the desktop", repo.byId("a")?.body)
+            assertEquals("mac", repo.byId("a")?.deviceId)
+            assertTrue(f.exists())
+        } finally {
+            f.delete()
+        }
+    }
+
+    @Test
+    fun `inMemoryRepository starts empty every time`() {
+        inMemoryRepository().create(id = "a", body = "x", date = LocalDate.parse("2026-07-04"))
+        assertEquals(0, inMemoryRepository().liveCount(), "each call must be a fresh database")
+    }
+}

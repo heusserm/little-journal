@@ -1,0 +1,17 @@
+# Layered on SwiftLint's defaults; only deviations are recorded here.
+included:
+  - iosApp/iosApp
+  - iosApp/iosAppTests
+
+identifier_name:
+  # Loop counters and channel pointers read better short. Everything longer
+  # than that should still be named properly, so the floor is lowered rather
+  # than the rule disabled.
+  min_length:
+    warning: 1
+    error: 1
+  excluded: [i, ch, id, to]
+
+line_length:
+  warning: 130
+  error: 160

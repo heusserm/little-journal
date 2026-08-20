@@ -136,7 +136,7 @@ private fun MovedFromNote(existing: JournalEntry?, current: LocalDate) {
 @Composable
 private fun MoodRow(mood: Int?, onSelect: (Int?) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        (1..5).forEach { value ->
+        for (value in 1..5) {
             FilterChip(
                 selected = mood == value,
                 onClick = { onSelect(if (mood == value) null else value) },

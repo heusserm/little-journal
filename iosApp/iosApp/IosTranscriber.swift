@@ -99,7 +99,10 @@ final class IosTranscriber: NSObject, Transcriber {
         }
         guard speech == .authorized else {
             onMain {
-                listener.onError(message: "Speech recognition not authorised (\(speech.rawValue)). Enable it in Settings > Little Journal.")
+                listener.onError(
+                    message: "Speech recognition not authorised (\(speech.rawValue)). "
+                        + "Enable it in Settings > Little Journal."
+                )
             }
             return false
         }

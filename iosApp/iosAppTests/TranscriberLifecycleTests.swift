@@ -22,28 +22,28 @@ final class RecordingListener: NSObject, TranscriberListener {
 final class TranscriberLifecycleTests: XCTestCase {
 
     func testStoppingBeforeStartingLeavesItUsable() {
-        let t = IosTranscriber()
+        let transcriber = IosTranscriber()
 
-        t.stop()   // tears down an engine that was never started
+        transcriber.stop()   // tears down an engine that was never started
 
-        XCTAssertTrue(t.isAvailable, "a no-op stop must not disable the recognizer")
+        XCTAssertTrue(transcriber.isAvailable, "a no-op stop must not disable the recognizer")
     }
 
     func testStoppingTwiceLeavesItUsable() {
-        let t = IosTranscriber()
+        let transcriber = IosTranscriber()
 
-        t.stop()
-        t.stop()
+        transcriber.stop()
+        transcriber.stop()
 
-        XCTAssertTrue(t.isAvailable, "stop must be idempotent, not destructive")
+        XCTAssertTrue(transcriber.isAvailable, "stop must be idempotent, not destructive")
     }
 
     func testStartThenImmediateStopProducesNoTranscript() {
-        let t = IosTranscriber()
+        let transcriber = IosTranscriber()
         let listener = RecordingListener()
 
-        t.start(listener: listener)
-        t.stop()   // cancels the start task mid-flight
+        transcriber.start(listener: listener)
+        transcriber.stop()   // cancels the start task mid-flight
 
         XCTAssertTrue(listener.finals.isEmpty, "nothing was spoken, so nothing may be transcribed")
         XCTAssertTrue(listener.partials.isEmpty)
@@ -74,11 +74,11 @@ final class TranscriberLifecycleTests: XCTestCase {
         told.assertForOverFulfill = false
         listener.onAnything = { told.fulfill() }
 
-        let t = IosTranscriber()
-        t.start(listener: listener)
+        let transcriber = IosTranscriber()
+        transcriber.start(listener: listener)
 
         wait(for: [told], timeout: 30)
-        t.stop()
+        transcriber.stop()
 
         XCTAssertFalse(
             listener.statuses.isEmpty && listener.errors.isEmpty,

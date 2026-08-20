@@ -123,6 +123,46 @@ from the report; counting it flatters storage and hides gaps elsewhere.
 `SpeechAnalyzer` or `AVAudioEngine`, neither of which runs in the Simulator.
 Treat changes there with more care than the number suggests.
 
+## Linting
+
+Two real linters, both installed via Homebrew rather than as Gradle plugins —
+see the trap below for why.
+
+```bash
+brew install detekt swiftlint          # once
+detekt --input app/src,storage/src --config detekt.yml --build-upon-default-config
+swiftlint lint --quiet
+```
+
+**Both are clean as of 2026-08-20.** Configuration lives in `detekt.yml` and
+`.swiftlint.yml`, and both files record *why* each deviation exists rather than
+just silencing rules.
+
+Out of the box detekt reported **108 weighted issues**; roughly 80% were Compose
+conventions, not defects. `@Composable` functions are PascalCase by design, and
+`dp`/`sp`/colour literals are not magic numbers. Two rounds of tuning brought it
+to 2 real findings, both of which were worth fixing. **The tuning matters more
+than the tool** — a linter that cries wolf gets ignored, and then it protects
+nothing.
+
+Note detekt's default test excludes assume `src/test/`. Kotlin Multiplatform
+uses `commonTest` / `desktopTest` / `jvmTest`, so they are listed explicitly in
+`detekt.yml`; without that, every backticked test name is a naming violation.
+
+### Trap: `:app:lint` does not work
+
+Android Lint fails on this toolchain. AGP 8.7.3 bundles a Kotlin 2.0 analyzer
+and the project is on Kotlin 2.2.20, so lint cannot read its own compiled
+metadata:
+
+```
+Module was compiled with an incompatible version of Kotlin.
+The binary version of its metadata is 2.2.0, expected version is 2.0.0.
+```
+
+Use standalone detekt instead, which sidesteps the version skew entirely.
+Fixing it properly means upgrading AGP, which has not been attempted.
+
 ## Code health (CRAP)
 
 CRAP scores how risky a change to a method is, by combining how branchy it is

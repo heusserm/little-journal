@@ -6,6 +6,8 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import com.xndev.littlejournal.db.Entry as DbEntry
 
+private const val ISO_YEAR_PREFIX = 5   // length of "YYYY-"
+
 /**
  * Everything the app is allowed to do to stored entries.
  *
@@ -111,9 +113,16 @@ class JournalRepository(
             .executeAsList()
             .associate { LocalDate.parse(it.entry_date) to it.entry_count.toInt() }
 
-    /** Same month and day, earlier years. */
+    /**
+     * Same month and day, earlier years.
+     *
+     * Both sides of this comparison slice an ISO date, and they must agree.
+     * Kotlin's substring is 0-based, SQLite's substr is 1-based, so the same
+     * offset appears here as 5 and in Entry.sq's onThisDay as 6. Change one
+     * without the other and the query silently matches nothing.
+     */
     fun onThisDay(today: LocalDate): List<JournalEntry> {
-        val monthDay = today.toString().substring(5) // 'MM-DD'
+        val monthDay = today.toString().substring(ISO_YEAR_PREFIX) // 'MM-DD'
         return entries.onThisDay(monthDay, today.toString()).executeAsList().map { it.hydrate() }
     }
 

@@ -1,0 +1,52 @@
+# Tuned for Compose Multiplatform. Layered on detekt's defaults with
+# --build-upon-default-config, so this file only records the deviations.
+#
+# Out of the box detekt reports ~108 issues here, of which roughly 80% are
+# Compose conventions rather than defects: @Composable functions are PascalCase
+# by design, and dp/sp/colour literals are not "magic numbers". Leaving that
+# noise in trains people to ignore the tool, so it is silenced deliberately
+# rather than by lowering the bar generally.
+
+# detekt's default test excludes assume src/test/. Kotlin Multiplatform uses
+# commonTest / desktopTest / jvmTest, so they have to be named explicitly or
+# every backticked test name and every literal in an assertion is reported.
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention, and Compose tooling depends on it.
+    ignoreAnnotated: ['Composable']
+    excludes: &tests
+      - '**/commonTest/**'
+      - '**/desktopTest/**'
+      - '**/jvmTest/**'
+      - '**/androidTest/**'
+      - '**/iosTest/**'
+
+style:
+  MagicNumber:
+    # dp, sp and 0xFF.. colours read better inline than as named constants.
+    ignoreAnnotated: ['Composable']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreNumbers: ['-1', '0', '1', '2', '100']
+    excludes: *tests
+  MaxLineLength:
+    maxLineLength: 120
+  ForbiddenComment:
+    active: false
+
+complexity:
+  TooManyFunctions:
+    # A state holder and a repository legitimately expose a lot of small
+    # functions; complexity per function is the metric that matters, and
+    # tools/crap.py already tracks it.
+    thresholdInClasses: 30
+    thresholdInFiles: 30
+    ignoreAnnotatedFunctions: ['Composable']
+  LongParameterList:
+    functionThreshold: 8
+    ignoreDefaultParameters: true
+
+empty-blocks:
+  EmptyFunctionBlock:
+    # NoopTranscriber.stop() is deliberately empty; that is the whole point.
+    ignoreOverridden: true

@@ -11,9 +11,12 @@ private val MONTHS = listOf(
 
 private val WEEKDAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
+/** "August" -> "Aug". Weekday names are already this length. */
+private const val ABBREVIATION_LENGTH = 3
+
 fun Month.title(): String = MONTHS[ordinal]
 
-fun Month.short(): String = title().take(3)
+fun Month.short(): String = title().take(ABBREVIATION_LENGTH)
 
 fun DayOfWeek.short(): String = WEEKDAYS[ordinal]
 

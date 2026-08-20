@@ -119,11 +119,70 @@ xcrun xccov view --report --json iosApp/cov.xcresult
 Kotlin is at **93% line / 72% branch**. Generated SQLDelight output is excluded
 from the report; counting it flatters storage and hides gaps elsewhere.
 
-**`IosTranscriber.swift` is 14% covered and that is the real risk in this
-project.** Only `convert` and `environmentNote` can be exercised — everything
-else touches `SpeechAnalyzer` or `AVAudioEngine`, neither of which runs in the
-Simulator. It is simultaneously the most complex file and the least verified
-one. Treat changes there with more care than the coverage number suggests.
+`IosTranscriber.swift` sits at **54%**. The rest is unreachable: it touches
+`SpeechAnalyzer` or `AVAudioEngine`, neither of which runs in the Simulator.
+Treat changes there with more care than the number suggests.
+
+## Code health (CRAP)
+
+CRAP scores how risky a change to a method is, by combining how branchy it is
+with how well it is tested:
+
+```
+CRAP = complexity² × (1 − coverage)³ + complexity
+```
+
+Fully covered code scores its own complexity. Uncovered code is punished
+sharply — the cube means partial coverage helps a lot. **Above 30 fails**: that
+is code both branchy and unverified, where a change is most likely to break
+something quietly.
+
+```bash
+./gradlew :app:koverXmlReport :storage:koverXmlReport
+xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -derivedDataPath iosApp/dd -enableCodeCoverage YES \
+  -resultBundlePath iosApp/cov.xcresult
+python3 tools/crap.py
+```
+
+**As of 2026-08-20: 85 methods scored, mean 2.1, max 20.0, none over 30.**
+
+Everything scoring above 2 — the rest are at or below their own complexity and
+need no attention:
+
+| CRAP | cx | loc | cover | method | file |
+|---:|---:|---:|---:|---|---|
+| **20.0** | 4 | 17 | 0% | `pump` | IosTranscriber.swift |
+| 6.6 | 6 | 9 | 75% | `CurrentScreen` | App.kt |
+| 6.0 | 6 | 39 | 100% | `SearchScreen` | SearchScreen.kt |
+| 6.0 | 2 | 11 | 0% | `databasePath` | main.kt (desktop) |
+| 4.2 | 4 | 7 | 75% | `back` | JournalState.kt |
+| 4.2 | 4 | 26 | 78% | `prepareTranscriber` | IosTranscriber.swift |
+| 4.0 | 4 | 33 | 100% | `DayCell` | CalendarScreen.kt |
+| 4.0 | 4 | 42 | 100% | `EditorScreen` | EditorScreen.kt |
+| 4.0 | 4 | 14 | 100% | `commitDraft` | JournalState.kt |
+| 4.0 | 4 | 19 | 100% | `save` | JournalState.kt |
+| 3.3 | 3 | 18 | 68% | `authorize` | IosTranscriber.swift |
+| 3.0 | 3 | 53 | 100% | `CalendarScreen` | CalendarScreen.kt |
+| 3.0 | 3 | 28 | 100% | `DayScreen` | DayScreen.kt |
+| 3.0 | 3 | 16 | 100% | `LiveTranscript` | TodayScreen.kt |
+| 3.0 | 3 | 16 | 100% | `CaptureActions` | TodayScreen.kt |
+| 3.0 | 3 | 9 | 100% | `MovedFromNote` | EditorScreen.kt |
+| 3.0 | 3 | 7 | 100% | `onFinal` | JournalState.kt |
+
+**`pump` is the one worth knowing about.** It drains recognizer results and
+dispatches them to the app, it is completely untested, and it is the only
+method in the project scoring in double digits. It cannot be reached from the
+Simulator because it needs a live `SpeechTranscriber`. If dictation ever
+misbehaves in a way the UI can see — text arriving twice, partials never
+settling, results lost — start there.
+
+`databasePath` scores 6 on complexity 2 purely because it is uncovered; it is
+eleven lines of desktop-only path resolution and not worth chasing.
+
+Everything else scoring above 2 is fully covered and scores its own complexity,
+which is the floor. Nothing there needs work.
 
 **Desktop dev database:** `~/Code/LittleJournal/journal.db` (gitignored). The
 path is printed at startup. Override with `-Dlittlejournal.db=/path`. Inspect

@@ -30,7 +30,9 @@ app/                            Compose UI. Built.
   src/iosMain/                    MainViewController
   src/desktopMain/                main.kt (dev target)
 
-iosApp/                         Xcode wrapper.        NOT BUILT YET
+iosApp/                         Xcode wrapper, XcodeGen from project.yml.
+  iosApp/IosTranscriber.swift     SpeechAnalyzer implementation of the Kotlin
+                                  Transcriber interface, injected at startup
 ```
 
 ## Commands
@@ -42,6 +44,14 @@ iosApp/                         Xcode wrapper.        NOT BUILT YET
 ./gradlew :app:compileKotlinIosArm64          # verify iOS target
 ./gradlew :storage:compileDebugKotlinAndroid  # verify Android target
 ./gradlew build                               # everything
+
+# iOS app
+cd iosApp && xcodegen generate                # after editing iosApp/project.yml
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -destination 'id=<device-udid>' -derivedDataPath iosApp/dd-device \
+  -allowProvisioningUpdates build
+xcrun devicectl device install app --device <device-udid> \
+  "iosApp/dd-device/Build/Products/Debug-iphoneos/Little Journal.app"
 ```
 
 Test reports: `storage/build/reports/tests/jvmTest/index.html`
@@ -99,6 +109,18 @@ Kotlin/Native interops through Objective-C headers and **cannot see it**.
 Dictation requires a Swift shim implementing a Kotlin-declared interface,
 injected into `MainViewController`. There is no way around this.
 
+**The iOS app target must link `-lsqlite3`.** SQLDelight's native driver binds
+the *system* SQLite, and the Kotlin framework does not bundle it, so linking
+fails with an undefined `_sqlite3_step`. The flag lives in `OTHER_LDFLAGS` in
+`iosApp/project.yml`.
+
+**Speech recognition does not work in the iOS Simulator — at all.** The runtime
+ships no ASR assets. The log says `GeneralASR is not supported on this platform`
+and reports zero available languages, so `AssetInventory` can never install a
+model there. Dictation can only be exercised on a physical device. Do not spend
+time debugging a "not subscribed to transcription.en" error in the simulator;
+it is not your code.
+
 **Compose `Column` does not scroll by default.** The month grid overlapped its
 own final week on short windows until `verticalScroll` was added. Run the
 desktop target at a small window size before trusting any new layout.
@@ -121,9 +143,16 @@ iPhone 17 Pro but has never been run.
 
 ## Status
 
-Storage and UI are built and committed. Not built: `iosApp/` Xcode wrapper,
-dictation, search UI, daily prompts, export/import. Nothing is shippable and
-nothing is on the App Store.
+Storage, UI, the iOS wrapper, dictation, spoken-time cleanup and search are
+built and committed. Runs on the iOS simulator and installs on a physical
+device.
+
+Not built: daily prompts, export/import, FTS search, Android dictation. Nothing
+is shippable and nothing is on the App Store.
+
+**Dictation has never been verified against real human speech.** Everything
+measured so far was `say`-generated audio on macOS. The app is installed on
+Matt's iPhone 17 Pro awaiting that test.
 
 ## Related conventions
 

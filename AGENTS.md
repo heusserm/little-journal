@@ -344,6 +344,14 @@ numbers; every one of them is reproducible from `tools/`.
 | SwiftLint | **0** |
 | Android Lint | 4 warnings, all "newer version available" |
 
+**Per-function detail — every function's size, complexity, coverage, CRAP and
+referencing tests, plus every test's SCRAP — is in
+[`HEALTH.md`](HEALTH.md)**, regenerated with:
+
+```bash
+python3 tools/health.py > HEALTH.md
+```
+
 Where the risk actually is, in one place:
 
 | CRAP | cx | cover | method |

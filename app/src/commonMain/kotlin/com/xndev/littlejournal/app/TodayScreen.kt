@@ -1,7 +1,6 @@
 package com.xndev.littlejournal.app
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,15 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -31,7 +27,6 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun TodayScreen(state: JournalState) {
     val today = todayLocal()
-    var draft by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -44,26 +39,48 @@ fun TodayScreen(state: JournalState) {
 
         item {
             OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
+                value = state.draft,
+                onValueChange = state::updateDraft,
                 modifier = Modifier.fillMaxWidth().height(180.dp),
-                placeholder = { Text("What happened today?") },
+                placeholder = { Text(if (state.canDictate) "Talk, or type" else "What happened today?") },
             )
+        }
+
+        // The still-being-revised tail, shown but never stored.
+        if (state.partial.isNotEmpty()) {
+            item {
+                Text(
+                    state.partial,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (state.dictationStatus.isNotEmpty()) {
+            item {
+                Text(
+                    state.dictationStatus,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
 
         item {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = {
-                        state.save(draft, today, existingId = null, mood = null, tags = emptyList())
-                        draft = ""
-                    },
-                    enabled = draft.isNotBlank(),
-                ) { Text("Save") }
+                if (state.canDictate) {
+                    FilledTonalButton(onClick = state::toggleDictation) {
+                        Text(if (state.isDictating) "◼  Stop" else "●  Talk")
+                    }
+                }
+                Button(onClick = state::commitDraft, enabled = state.draft.isNotBlank()) {
+                    Text("Save")
+                }
             }
         }
 

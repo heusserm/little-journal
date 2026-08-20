@@ -28,12 +28,14 @@ private val JournalColors = darkColorScheme(
 )
 
 @Composable
-fun App(repo: JournalRepository) {
-    val state = remember { JournalState(repo) }
+fun App(repo: JournalRepository, transcriber: Transcriber = NoopTranscriber) {
+    val state = remember { JournalState(repo, transcriber) }
 
     MaterialTheme(colorScheme = JournalColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            val showBottomBar = state.screen is Screen.Today || state.screen is Screen.Calendar
+            val showBottomBar = state.screen is Screen.Today ||
+                state.screen is Screen.Calendar ||
+                state.screen is Screen.Search
 
             Scaffold(
                 bottomBar = {
@@ -51,6 +53,12 @@ fun App(repo: JournalRepository) {
                                 icon = { Text("▦") },
                                 label = { Text("Calendar") },
                             )
+                            NavigationBarItem(
+                                selected = state.screen is Screen.Search,
+                                onClick = { state.openSearch() },
+                                icon = { Text("⌕") },
+                                label = { Text("Search") },
+                            )
                         }
                     }
                 }
@@ -59,6 +67,7 @@ fun App(repo: JournalRepository) {
                     when (val screen = state.screen) {
                         is Screen.Today -> TodayScreen(state)
                         is Screen.Calendar -> CalendarScreen(state)
+                        is Screen.Search -> SearchScreen(state)
                         is Screen.Day -> DayScreen(state, screen.date)
                         is Screen.Edit -> EditorScreen(state, screen.date, state.editing)
                     }

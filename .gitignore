@@ -24,3 +24,8 @@ iosApp/build/
 journal.db
 journal.db-shm
 journal.db-wal
+
+# Xcode
+iosApp/dd/
+iosApp/dd-device/
+iosApp/iosApp.xcodeproj/

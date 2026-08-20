@@ -21,6 +21,7 @@ fun todayLocal(): LocalDate =
 sealed interface Screen {
     data object Today : Screen
     data object Calendar : Screen
+    data object Search : Screen
     data class Day(val date: LocalDate) : Screen
     /** [entryId] null means "new entry on [date]". */
     data class Edit(val entryId: String?, val date: LocalDate) : Screen
@@ -33,11 +34,17 @@ sealed interface Screen {
  * plain object held by `remember` is easier to follow, and it keeps commonMain
  * free of platform lifecycle types.
  *
+ * Implements [TranscriberListener] directly, so the platform recognizer talks
+ * straight to app state. Those callbacks must arrive on the main thread.
+ *
  * Reads are synchronous. At journal scale that is genuinely fine: a month query
  * touches tens of rows against a local SQLite file.
  */
 @OptIn(ExperimentalUuidApi::class)
-class JournalState(private val repo: JournalRepository) {
+class JournalState(
+    private val repo: JournalRepository,
+    private val transcriber: Transcriber = NoopTranscriber,
+) : TranscriberListener {
 
     var screen by mutableStateOf<Screen>(Screen.Today)
         private set
@@ -58,6 +65,33 @@ class JournalState(private val repo: JournalRepository) {
     var editing by mutableStateOf<JournalEntry?>(null)
         private set
 
+    // MARK: capture draft
+
+    var draft by mutableStateOf("")
+        private set
+
+    /** Text the recognizer is still revising. Shown dimmed, never stored. */
+    var partial by mutableStateOf("")
+        private set
+
+    var isDictating by mutableStateOf(false)
+        private set
+
+    var dictationStatus by mutableStateOf("")
+        private set
+
+    private var draftUsedSpeech = false
+
+    val canDictate: Boolean get() = transcriber.isAvailable
+
+    // MARK: search
+
+    var searchQuery by mutableStateOf("")
+        private set
+
+    var searchResults by mutableStateOf<List<JournalEntry>>(emptyList())
+        private set
+
     init {
         refreshMonth()
         refreshToday()
@@ -73,6 +107,10 @@ class JournalState(private val repo: JournalRepository) {
     fun openCalendar() {
         screen = Screen.Calendar
         refreshMonth()
+    }
+
+    fun openSearch() {
+        screen = Screen.Search
     }
 
     fun openDay(date: LocalDate) {
@@ -98,6 +136,81 @@ class JournalState(private val repo: JournalRepository) {
         }
     }
 
+    // MARK: dictation
+
+    fun toggleDictation() {
+        if (isDictating) stopDictation() else startDictation()
+    }
+
+    private fun startDictation() {
+        if (!transcriber.isAvailable) {
+            dictationStatus = "Dictation is not available here."
+            return
+        }
+        isDictating = true
+        dictationStatus = "Starting"
+        transcriber.start(this)
+    }
+
+    fun stopDictation() {
+        if (!isDictating) return
+        transcriber.stop()
+        isDictating = false
+        partial = ""
+        dictationStatus = ""
+    }
+
+    override fun onPartial(text: String) {
+        partial = text
+    }
+
+    override fun onFinal(text: String) {
+        val piece = text.trim()
+        if (piece.isEmpty()) return
+        draft = if (draft.isBlank()) piece else "$draft $piece"
+        partial = ""
+        draftUsedSpeech = true
+    }
+
+    override fun onStatus(message: String) {
+        dictationStatus = message
+    }
+
+    override fun onError(message: String) {
+        dictationStatus = message
+        isDictating = false
+        partial = ""
+    }
+
+    // MARK: draft
+
+    fun updateDraft(text: String) {
+        draft = text
+    }
+
+    fun clearDraft() {
+        draft = ""
+        partial = ""
+        draftUsedSpeech = false
+    }
+
+    /** Saves the capture draft as a new entry for today. */
+    fun commitDraft() {
+        if (draft.isBlank()) return
+        stopDictation()
+        // Spoken times arrive mangled; only touch text that actually came from speech.
+        val body = if (draftUsedSpeech) SpokenText.tidy(draft) else draft
+        repo.create(
+            id = Uuid.random().toString(),
+            body = body.trim(),
+            date = todayLocal(),
+            source = if (draftUsedSpeech) EntrySource.DICTATED else EntrySource.TYPED,
+        )
+        clearDraft()
+        refreshMonth()
+        refreshToday()
+    }
+
     // MARK: mutations
 
     fun save(body: String, date: LocalDate, existingId: String?, mood: Int?, tags: List<String>) {
@@ -117,12 +230,21 @@ class JournalState(private val repo: JournalRepository) {
         }
         refreshMonth()
         refreshToday()
+        if (searchQuery.isNotBlank()) runSearch(searchQuery)
     }
 
     fun delete(id: String) {
         repo.delete(id)
         refreshMonth()
         refreshToday()
+        if (searchQuery.isNotBlank()) runSearch(searchQuery)
+    }
+
+    // MARK: search
+
+    fun runSearch(query: String) {
+        searchQuery = query
+        searchResults = if (query.isBlank()) emptyList() else repo.search(query)
     }
 
     // MARK: month paging

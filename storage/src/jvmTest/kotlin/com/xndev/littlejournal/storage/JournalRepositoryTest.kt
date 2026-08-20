@@ -144,3 +144,78 @@ class JournalRepositoryTest {
         assertEquals(1, loaded?.wordCount)
     }
 }
+
+/** Queries the first suite left untouched. */
+class JournalRepositoryQueryTest {
+
+    private fun repo() = inMemoryRepository()
+
+    private val may1 = LocalDate.parse("2026-05-01")
+    private val may15 = LocalDate.parse("2026-05-15")
+    private val jun1 = LocalDate.parse("2026-06-01")
+
+    @Test
+    fun `a date range includes its endpoints and excludes what lies outside`() {
+        val r = repo()
+        r.create(id = "a", body = "start", date = may1)
+        r.create(id = "b", body = "middle", date = may15)
+        r.create(id = "c", body = "outside", date = jun1)
+
+        val found = r.inRange(may1, may15)
+
+        assertEquals(listOf("start", "middle"), found.map { it.body })
+    }
+
+    @Test
+    fun `entries are found by tag, and tag usage is counted`() {
+        val r = repo()
+        r.create(id = "a", body = "run", date = may1, tags = listOf("health"))
+        r.create(id = "b", body = "swim", date = may15, tags = listOf("health", "travel"))
+        r.create(id = "c", body = "meeting", date = may15, tags = listOf("work"))
+
+        assertEquals(setOf("a", "b"), r.withTag("health").map { it.id }.toSet())
+        assertEquals(2, r.allTags()["health"])
+        assertEquals(1, r.allTags()["travel"])
+    }
+
+    @Test
+    fun `a deleted entry disappears from its tag`() {
+        val r = repo()
+        r.create(id = "a", body = "run", date = may1, tags = listOf("health"))
+
+        r.delete("a")
+
+        assertTrue(r.withTag("health").isEmpty())
+    }
+
+    @Test
+    fun `reassigning an entry that does not exist returns null rather than throwing`() {
+        assertNull(repo().reassign("nope", may1))
+    }
+
+    @Test
+    fun `live count ignores tombstones`() {
+        val r = repo()
+        r.create(id = "a", body = "one", date = may1)
+        r.create(id = "b", body = "two", date = may1)
+        r.delete("b")
+
+        assertEquals(1, r.liveCount())
+    }
+
+    @Test
+    fun `search honours its limit`() {
+        val r = repo()
+        repeat(5) { r.create(id = "e$it", body = "repeated word", date = may1) }
+
+        assertEquals(2, r.search("repeated", limit = 2).size)
+    }
+
+    @Test
+    fun `word count handles empty and whitespace-only bodies`() {
+        val r = repo()
+        r.create(id = "a", body = "one two three", date = may1)
+
+        assertEquals(3, r.byId("a")!!.wordCount)
+    }
+}

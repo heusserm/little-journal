@@ -55,3 +55,64 @@ class SpokenTextTest {
         assertEquals(text, SpokenText.tidy(text))
     }
 }
+
+/** Edge cases around the deliberately narrow time rules. */
+class SpokenTextEdgeTest {
+
+    @Test
+    fun `every time preposition is recognised`() {
+        listOf("at", "around", "by", "until", "till", "before", "after", "since", "from").forEach {
+            assertEquals("$it 9:15", SpokenText.tidy("$it 915"), "preposition '$it' should work")
+        }
+    }
+
+    @Test
+    fun `matching is case insensitive`() {
+        assertEquals("At 11:45", SpokenText.tidy("At 1145"))
+        assertEquals("AROUND 6:30", SpokenText.tidy("AROUND 6.30"))
+    }
+
+    @Test
+    fun `clock boundaries are handled`() {
+        assertEquals("at 12:00", SpokenText.tidy("at 1200"))
+        assertEquals("at 1:05", SpokenText.tidy("at 105"))
+        assertEquals("at 12:59", SpokenText.tidy("at 1259"))
+    }
+
+    @Test
+    fun `hours above twelve are treated as quantities`() {
+        assertEquals("at 1300", SpokenText.tidy("at 1300"))
+        assertEquals("at 2359", SpokenText.tidy("at 2359"))
+    }
+
+    @Test
+    fun `minute sixty and beyond is not a time`() {
+        assertEquals("at 1160", SpokenText.tidy("at 1160"))
+        assertEquals("at 999", SpokenText.tidy("at 999"))
+    }
+
+    @Test
+    fun `units after the number keep it a quantity`() {
+        // "around" IS a time preposition, so only the trailing unit can save
+        // these from being rewritten -- which is the point of the test.
+        listOf("dollars", "miles", "people", "words", "calories", "steps", "years").forEach {
+            assertEquals("around 1145 $it", SpokenText.tidy("around 1145 $it"), "unit '$it'")
+        }
+    }
+
+    @Test
+    fun `the same number without a unit is read as a time`() {
+        assertEquals("around 11:45 we left", SpokenText.tidy("around 1145 we left"))
+    }
+
+    @Test
+    fun `an empty string survives`() {
+        assertEquals("", SpokenText.tidy(""))
+    }
+
+    @Test
+    fun `text with no numbers at all is returned unchanged`() {
+        val text = "Nothing numeric happened today, which is itself worth noting."
+        assertEquals(text, SpokenText.tidy(text))
+    }
+}

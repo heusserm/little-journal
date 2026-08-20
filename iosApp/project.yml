@@ -44,10 +44,33 @@ targets:
           cd "$SRCROOT/.."
           ./gradlew :app:embedAndSignAppleFrameworkForXcode
 
+  iosAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: iosAppTests
+    dependencies:
+      - target: iosApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xndev.littleJournal.tests
+        # PRODUCT_NAME has a space, so the default TEST_HOST path is wrong.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Little Journal.app/Little Journal"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        DEVELOPMENT_TEAM: A69JRS6V57
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+
 schemes:
   iosApp:
     build:
       targets:
         iosApp: all
+        iosAppTests: [test]
+    test:
+      config: Debug
+      targets:
+        - iosAppTests
     run:
       config: Debug

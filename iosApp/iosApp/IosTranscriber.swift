@@ -19,7 +19,7 @@ final class IosTranscriber: NSObject, Transcriber {
     /// Never claim "this is the Simulator" without checking. The Simulator ships
     /// no ASR assets and never will; a device with the same symptom has a real,
     /// fixable problem, and conflating the two sends you down the wrong path.
-    private var environmentNote: String {
+    var environmentNote: String {
         #if targetEnvironment(simulator)
         return "Simulator (no speech assets exist here)"
         #else
@@ -199,7 +199,7 @@ final class IosTranscriber: NSObject, Transcriber {
     }
 
     /// Runs on the realtime audio thread. Returns nil when there is nothing to send.
-    private static func convert(
+    static func convert(
         _ buffer: AVAudioPCMBuffer,
         with converter: AVAudioConverter?,
         to format: AVAudioFormat

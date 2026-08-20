@@ -29,12 +29,19 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
         }
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.9.3")
         }
         val desktopMain by getting
         desktopMain.dependencies {
+            implementation(compose.desktop.currentOs)
+        }
+        val desktopTest by getting
+        desktopTest.dependencies {
+            // The UI test harness needs a real toolkit to render into.
             implementation(compose.desktop.currentOs)
         }
     }

@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Runs the fast half of the gate before anything leaves this machine.
+#
+# Installed by `fastlane install_hooks` -- .git/hooks is not version controlled,
+# so the copy that matters lives here and has to be installed deliberately.
+#
+# This is `fastlane quick`, not `fastlane check`: a hook that takes four minutes
+# is a hook people learn to pass --no-verify to, and a gate that is routinely
+# skipped protects nothing. Run `fastlane check` before a release.
+#
+# To bypass once, deliberately: git push --no-verify
+
+if ! command -v fastlane >/dev/null 2>&1; then
+    echo "pre-push: fastlane not found; skipping the gate." >&2
+    echo "          brew install fastlane, or push with --no-verify." >&2
+    exit 0
+fi
+
+echo "pre-push: running fastlane quick..."
+if ! fastlane quick; then
+    echo >&2
+    echo "pre-push: the gate failed, so nothing was pushed." >&2
+    echo "          Fix it, or push with --no-verify if you know why." >&2
+    exit 1
+fi

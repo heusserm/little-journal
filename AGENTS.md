@@ -40,6 +40,10 @@ app/                            Compose UI. Built.
 iosApp/                         Xcode wrapper, XcodeGen from project.yml.
   iosApp/IosTranscriber.swift     SpeechAnalyzer implementation of the Kotlin
                                   Transcriber interface, injected at startup
+
+fastlane/Fastfile               Local release pipeline. No CI, no secrets.
+tools/hooks/pre-push            The gate, installed by `fastlane install_hooks`
+tools/parse.py                  The one declaration parser the analyzers share
 ```
 
 ## Commands
@@ -438,6 +442,58 @@ coverage *fell* from 54% to 38.6% when the start/stop race was fixed — the
 buggy version was executing startup code after `stop()` had been called, and
 that accidental execution was being counted as coverage. Lower number, better
 code.
+
+## Releasing
+
+Local, and deliberately so. There is no CI: signing keys and store credentials
+have no business near a public repository, and the app needs Xcode 26, which
+hosted macOS runners cannot be relied on for yet.
+
+```bash
+brew install fastlane           # once
+fastlane install_hooks          # once -- installs the pre-push gate
+
+fastlane check                  # the whole gate, ~40s
+fastlane quick                  # the fast half, what the hook runs
+fastlane dmg                    # desktop DMG into build/release/
+fastlane version                # resync the iOS plist to gradle.properties
+```
+
+`check` runs the 131 tests, all three linters and all three analyzers. The
+pre-push hook runs `quick` instead — a four-minute hook is one people learn to
+pass `--no-verify` to, and a gate that is routinely skipped protects nothing.
+The hook lives at `tools/hooks/pre-push` because `.git/hooks` is not version
+controlled; `install_hooks` copies it into place.
+
+**What is deliberately not here:** TestFlight, Play uploads, and any form of
+signing. Nothing has shipped, so none of it is needed yet — and the moment it
+is, the credentials belong in the keychain and in App Store Connect API keys,
+never in the tree. See the note at the end of Advice about what a public repo
+has already cost this project once.
+
+### One version, three shapes
+
+`littlejournal.version` in `gradle.properties` is the only place the version is
+written. Android's `versionName`, its `versionCode` (0.1.0 → 100), the desktop
+package version and the iOS `Info.plist` are all derived from it, and
+`fastlane check` fails if any of them has drifted.
+
+**Trap: jpackage will not accept a major version of 0.** Setting the desktop
+`packageVersion` to `0.1.0` fails the build outright:
+
+```
+* Illegal version for 'Dmg': '0.1.0' is not a valid version.
+```
+
+So a 0.x version is shifted into the 1.x range for the macOS package only —
+0.1.0 becomes 1.1.0 — which preserves ordering and cannot collide. The `dmg`
+lane then renames the artifact to `LittleJournal-0.1.0.dmg` so the file says
+what is true. **The version inside the bundle still reads 1.1.0**, and Finder's
+Get Info will show that; there is no way to put a 0.x version in a macOS app
+bundle. The lane prints this every time rather than letting someone discover it.
+
+The DMG is unsigned and un-notarized, so macOS refuses to open it without a
+right-click → Open. Signing it needs a Developer ID certificate.
 
 ## Toolchain
 

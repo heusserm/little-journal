@@ -1,0 +1,173 @@
+# Local release pipeline for Little Journal.
+#
+# Everything here runs on a Mac and needs no credentials, because nothing here
+# talks to a store. Signing, TestFlight and Play uploads are deliberately
+# absent: nothing has shipped yet, and putting store secrets anywhere near a
+# public repository is how an Apple ID ended up in this one's history once
+# already. Add them when there is something to ship, and keep them in the
+# keychain and App Store Connect API keys -- never in the tree.
+#
+#   fastlane check          the full gate: tests, linters, analyzers
+#   fastlane quick          the fast half of it, for the pre-push hook
+#   fastlane dmg            build the desktop DMG, named for the real version
+#   fastlane version        push gradle.properties' version into the iOS plist
+#   fastlane install_hooks  install the pre-push hook
+#
+# The hook runs `quick` rather than `check`, because a four-minute hook is one
+# people learn to pass --no-verify to, and a gate that is routinely skipped
+# protects nothing. `check` is what to run before cutting a release.
+
+default_platform(:mac)
+
+ROOT = File.expand_path("..", __dir__)
+PLIST = File.join(ROOT, "iosApp/iosApp/Info.plist")
+SIMULATOR = "platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5"
+
+# --- helpers -----------------------------------------------------------------
+
+def gradle_property(name)
+  line = File.readlines(File.join(ROOT, "gradle.properties"))
+             .find { |l| l.start_with?("#{name}=") }
+  UI.user_error!("#{name} is not set in gradle.properties") if line.nil?
+  line.split("=", 2).last.strip
+end
+
+def app_version
+  gradle_property("littlejournal.version")
+end
+
+# The versionCode rule, mirrored from build.gradle.kts. Duplicated on purpose
+# and checked by `verify_versions` rather than trusted: this file cannot read
+# Gradle's extra properties, and a silent disagreement about the build number
+# is worse than a noisy one.
+def app_version_code
+  major, minor, patch = app_version.split(".").map(&:to_i)
+  major * 10_000 + minor * 100 + patch
+end
+
+# The version actually baked into a built .app, as opposed to the one asked
+# for. Mirrors macPackageVersion in build.gradle.kts.
+def bundle_version
+  major, minor, patch = app_version.split(".").map(&:to_i)
+  major.zero? ? "1.#{minor}.#{patch}" : app_version
+end
+
+def plist_value(key)
+  `/usr/libexec/PlistBuddy -c "Print :#{key}" "#{PLIST}"`.strip
+end
+
+def run(command, message)
+  UI.header(message)
+  sh("cd #{ROOT.shellescape} && #{command}")
+end
+
+# --- lanes -------------------------------------------------------------------
+
+desc "Everything that has to be true before this is pushed"
+lane :check do
+  verify_versions
+  kotlin_tests
+  swift_tests
+  linters
+  analyzers
+  UI.success("All green.")
+end
+
+desc "The fast half of `check` -- what the pre-push hook runs"
+lane :quick do
+  verify_versions
+  kotlin_tests
+  run("detekt --input app/src,storage/src --config detekt.yml " \
+      "--build-upon-default-config", "detekt")
+  run("swiftlint lint --quiet --strict", "SwiftLint")
+  UI.success("Quick gate green. `fastlane check` is the full one.")
+end
+
+desc "Kotlin tests, on the desktop target"
+lane :kotlin_tests do
+  run("./gradlew :storage:jvmTest :app:desktopTest", "Kotlin tests")
+end
+
+desc "Swift tests, in the simulator"
+lane :swift_tests do
+  # The Simulator ships no speech assets, so these cover buffer conversion and
+  # lifecycle only -- never dictation itself. See AGENTS.md.
+  run("xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp " \
+      "-destination #{SIMULATOR.shellescape} -derivedDataPath iosApp/dd " \
+      "-quiet", "Swift tests")
+end
+
+desc "detekt, SwiftLint and Android Lint"
+lane :linters do
+  run("detekt --input app/src,storage/src --config detekt.yml " \
+      "--build-upon-default-config", "detekt")
+  run("swiftlint lint --quiet --strict", "SwiftLint")
+  # Android Lint earns its place here: it once caught a manifest bug that
+  # would have crashed the app on launch, past 110 tests and 95% coverage.
+  run("./gradlew :app:lintDebug", "Android Lint")
+end
+
+desc "CRAP, SCRAP and duplication"
+lane :analyzers do
+  run("./gradlew :app:koverXmlReport :storage:koverXmlReport", "Coverage")
+  run("python3 tools/crap.py", "CRAP")
+  run("python3 tools/scrap.py --compare", "SCRAP")
+  run("python3 tools/dry.py", "Duplication")
+end
+
+desc "Fail if any platform's version has drifted from gradle.properties"
+lane :verify_versions do
+  version = app_version
+  short = plist_value("CFBundleShortVersionString")
+  build = plist_value("CFBundleVersion")
+
+  problems = []
+  problems << "Info.plist CFBundleShortVersionString is #{short}, expected #{version}" if short != version
+  problems << "Info.plist CFBundleVersion is #{build}, expected #{app_version_code}" if build != app_version_code.to_s
+
+  unless problems.empty?
+    UI.error(problems.join("\n"))
+    UI.user_error!("Versions have drifted. Run `fastlane version` to resync.")
+  end
+  UI.success("Version #{version} (build #{app_version_code}) consistent everywhere.")
+end
+
+desc "Write gradle.properties' version into the iOS Info.plist"
+lane :version do
+  version = app_version
+  code = app_version_code
+  sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString #{version}' #{PLIST.shellescape}")
+  sh("/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion #{code}' #{PLIST.shellescape}")
+  UI.success("Info.plist set to #{version} (build #{code}).")
+end
+
+desc "Build the desktop DMG"
+lane :dmg do
+  verify_versions
+  run("./gradlew :app:packageDmg", "Building DMG")
+
+  built = Dir.glob(File.join(ROOT, "app/build/compose/binaries/**/*.dmg")).first
+  UI.user_error!("No DMG was produced.") if built.nil?
+
+  # Gradle names the file after the macOS-legal package version, which is
+  # shifted out of the 0.x range and would tell a user the wrong thing. The
+  # artifact that leaves this lane carries the version people were promised.
+  out_dir = File.join(ROOT, "build/release")
+  FileUtils.mkdir_p(out_dir)
+  final = File.join(out_dir, "LittleJournal-#{app_version}.dmg")
+  FileUtils.cp(built, final)
+
+  UI.success("#{final} (#{(File.size(final) / 1_048_576.0).round(1)} MB)")
+  UI.message("Unsigned and un-notarized: macOS will refuse to open it without")
+  UI.message("a right-click -> Open. Signing needs a Developer ID certificate.")
+  UI.message("Get Info will read #{bundle_version} rather than #{app_version} -- jpackage")
+  UI.message("will not put a 0.x version in a bundle. Only the filename can say it.")
+end
+
+desc "Install the pre-push hook"
+lane :install_hooks do
+  hook = File.join(ROOT, ".git/hooks/pre-push")
+  FileUtils.cp(File.join(ROOT, "tools/hooks/pre-push"), hook)
+  FileUtils.chmod(0o755, hook)
+  UI.success("pre-push hook installed. It runs `fastlane quick`.")
+end

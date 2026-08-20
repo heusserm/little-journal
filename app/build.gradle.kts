@@ -54,8 +54,8 @@ android {
         applicationId = "com.xndev.littlejournal"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = rootProject.extra["appVersionCode"] as Int
+        versionName = rootProject.extra["appVersion"] as String
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -69,7 +69,9 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "LittleJournal"
-            packageVersion = "1.0.0"
+            // Not appVersion: macOS rejects a major of 0. See macPackageVersion
+            // in the root build for why this is shifted rather than faked.
+            packageVersion = rootProject.extra["macPackageVersion"] as String
         }
     }
 }

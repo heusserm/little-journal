@@ -38,3 +38,8 @@ iosApp/*.xcresult/
 # alone does not untrack what is already tracked, so it was git rm --cached.
 __pycache__/
 *.pyc
+
+# Release artifacts, and fastlane run reports.
+build/release/
+fastlane/report.xml
+fastlane/Preview.html

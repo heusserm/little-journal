@@ -61,9 +61,27 @@ xcrun devicectl device install app --device <device-udid> \
 
 Generated SQLDelight code: `storage/build/generated/sqldelight/`
 
+## Running everything
+
+One block, in the order that fails fastest:
+
+```bash
+./gradlew :storage:jvmTest :app:desktopTest            # 100 Kotlin tests
+xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -derivedDataPath iosApp/dd                           # 10 Swift tests
+detekt --input app/src,storage/src --config detekt.yml --build-upon-default-config
+swiftlint lint --quiet
+./gradlew :app:lintDebug                               # Android Lint
+python3 tools/crap.py && python3 tools/scrap.py && python3 tools/dry.py
+```
+
+All of it is green except four Android Lint advisories about newer dependency
+versions. Keep it that way.
+
 ## Running the tests
 
-92 tests: 87 Kotlin, 5 Swift. All of them pass; keep it that way.
+110 tests: 100 Kotlin, 10 Swift. All of them pass; keep it that way.
 
 ```bash
 # Everything Kotlin — the usual command
@@ -149,19 +167,27 @@ Note detekt's default test excludes assume `src/test/`. Kotlin Multiplatform
 uses `commonTest` / `desktopTest` / `jvmTest`, so they are listed explicitly in
 `detekt.yml`; without that, every backticked test name is a naming violation.
 
-### Trap: `:app:lint` does not work
+### Android Lint — fixed by upgrading AGP
 
-Android Lint fails on this toolchain. AGP 8.7.3 bundles a Kotlin 2.0 analyzer
-and the project is on Kotlin 2.2.20, so lint cannot read its own compiled
-metadata:
+`:app:lintDebug` used to fail outright: AGP 8.7.3 bundled a Kotlin 2.0 analyzer
+against a Kotlin 2.2.20 project and could not read its own compiled metadata.
+Upgrading to **AGP 8.13.2 + Gradle 8.14.3** fixed it, and the first successful
+run immediately found a bug nothing else could:
 
 ```
-Module was compiled with an incompatible version of Kotlin.
-The binary version of its metadata is 2.2.0, expected version is 2.0.0.
+[Error] MissingClass  AndroidManifest.xml:8
+        Class referenced in the manifest, com.xndev.littlejournal.MainActivity,
+        not found
 ```
 
-Use standalone detekt instead, which sidesteps the version skew entirely.
-Fixing it properly means upgrading AGP, which has not been attempted.
+The manifest said `.MainActivity`, which resolves against the namespace to
+`com.xndev.littlejournal.MainActivity`, while the class lives in
+`...littlejournal.app`. **The Android app compiled, installed and would have
+died with ClassNotFoundException on launch.** No unit test, no Compose test and
+no amount of coverage could have caught that; only a manifest-aware linter.
+
+The lesson is worth keeping: a broken analyzer is worse than a missing one,
+because its silence reads like approval.
 
 ## Code health (CRAP)
 
@@ -297,6 +323,41 @@ A caveat learned the hard way: SCRAP's duplicate-setup rule originally flagged a
 single repeated factory call (`val s = state()` at the top of each test). That
 is deliberate isolation, not duplication, and penalising it punishes the better
 pattern. It now requires a shared prefix of at least two lines.
+
+## Health report
+
+Measured 2026-08-20 with the commands above. Regenerate rather than trust these
+numbers; every one of them is reproducible from `tools/`.
+
+| Metric | Value |
+|---|---|
+| Production methods | 109, across 1,280 lines |
+| Tests | **110** — 100 Kotlin, 10 Swift |
+| Assertions | 190, 1.8 per test |
+| Kotlin line coverage | **95.7%** (605/632) |
+| Kotlin branch coverage | 77.0% (234/304) |
+| Swift line coverage | 38.6% (90/233) |
+| CRAP | mean **2.3**, max 20.0, **none over 30** |
+| SCRAP | mean **6.0** (healthy), worst 25 |
+| Duplication | 1.8% (16 redundant lines) |
+| detekt | **0** |
+| SwiftLint | **0** |
+| Android Lint | 4 warnings, all "newer version available" |
+
+Where the risk actually is, in one place:
+
+| CRAP | cx | cover | method |
+|---:|---:|---:|---|
+| 20.0 | 4 | 0% | `prepareTranscriber` — IosTranscriber.swift |
+| 20.0 | 4 | 0% | `pump` — IosTranscriber.swift |
+| 6.0 | 6 | 100% | `CurrentScreen` — App.kt |
+
+Everything scoring above 6 is in `IosTranscriber.swift`, and it cannot be
+tested from the Simulator because there are no speech assets there. Swift
+coverage *fell* from 54% to 38.6% when the start/stop race was fixed — the
+buggy version was executing startup code after `stop()` had been called, and
+that accidental execution was being counted as coverage. Lower number, better
+code.
 
 ## Toolchain
 

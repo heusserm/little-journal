@@ -16,6 +16,17 @@ final class IosTranscriber: NSObject, Transcriber {
 
     var isAvailable: Bool { true }
 
+    /// Never claim "this is the Simulator" without checking. The Simulator ships
+    /// no ASR assets and never will; a device with the same symptom has a real,
+    /// fixable problem, and conflating the two sends you down the wrong path.
+    private var environmentNote: String {
+        #if targetEnvironment(simulator)
+        return "Simulator (no speech assets exist here)"
+        #else
+        return "This device"
+        #endif
+    }
+
     private let engine = AVAudioEngine()
     private var analyzer: SpeechAnalyzer?
     private var transcriber: SpeechTranscriber?
@@ -83,12 +94,15 @@ final class IosTranscriber: NSObject, Transcriber {
             let wanted = Locale(identifier: "en-US")
             let supported = await SpeechTranscriber.supportedLocales
             let locale = await SpeechTranscriber.supportedLocale(equivalentTo: wanted) ?? wanted
+
+            // An empty list is NOT a reason to stop. On a real device it can simply
+            // mean nothing is installed yet, which is exactly the state a first run
+            // is in -- bailing here would block the very download that fixes it.
+            // Report it and carry on; let the asset install produce the real error.
             if supported.isEmpty {
-                onMain {
-                    listener.onError(message: "This device reports no speech locales. On the Simulator that is expected and unfixable.")
-                }
-                return
+                onMain { listener.onStatus(message: "\(self.environmentNote) reports 0 installed locales; trying anyway") }
             }
+
             let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
             self.transcriber = transcriber
 
@@ -116,7 +130,9 @@ final class IosTranscriber: NSObject, Transcriber {
                     try await request.downloadAndInstall()
                     onMain { listener.onStatus(message: "Model installed") }
                 } else {
-                    onMain { listener.onError(message: "No installable model for \(locale.identifier).") }
+                    onMain {
+                        listener.onError(message: "No installable model for \(locale.identifier). \(self.environmentNote).")
+                    }
                     return
                 }
             }

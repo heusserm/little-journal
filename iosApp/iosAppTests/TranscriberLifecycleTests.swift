@@ -21,21 +21,32 @@ final class RecordingListener: NSObject, TranscriberListener {
 
 final class TranscriberLifecycleTests: XCTestCase {
 
-    func testStoppingBeforeStartingIsHarmless() {
+    func testStoppingBeforeStartingLeavesItUsable() {
         let t = IosTranscriber()
+
         t.stop()   // tears down an engine that was never started
+
+        XCTAssertTrue(t.isAvailable, "a no-op stop must not disable the recognizer")
     }
 
-    func testStoppingTwiceIsHarmless() {
+    func testStoppingTwiceLeavesItUsable() {
         let t = IosTranscriber()
+
         t.stop()
         t.stop()
+
+        XCTAssertTrue(t.isAvailable, "stop must be idempotent, not destructive")
     }
 
-    func testStartThenImmediateStopDoesNotCrash() {
+    func testStartThenImmediateStopProducesNoTranscript() {
         let t = IosTranscriber()
-        t.start(listener: RecordingListener())
+        let listener = RecordingListener()
+
+        t.start(listener: listener)
         t.stop()   // cancels the start task mid-flight
+
+        XCTAssertTrue(listener.finals.isEmpty, "nothing was spoken, so nothing may be transcribed")
+        XCTAssertTrue(listener.partials.isEmpty)
     }
 
     /// The boundary that matters: a Swift class satisfying a Kotlin-declared

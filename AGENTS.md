@@ -192,6 +192,48 @@ it directly — it is plain SQLite:
 sqlite3 journal.db "SELECT entry_date, substr(body,1,50) FROM entry;"
 ```
 
+## Test quality (SCRAP) and duplication (DRY)
+
+Two more analyzers live in `tools/`. Neither needs a build first.
+
+```bash
+python3 tools/scrap.py            # test-suite smells, per file
+python3 tools/scrap.py --detail   # per-test breakdown
+python3 tools/dry.py              # repeated code in production sources
+python3 tools/dry.py --tests --loose --show   # include tests, ignore literals
+```
+
+**SCRAP** is the mirror of CRAP: CRAP asks how risky a production method is,
+SCRAP asks how much the tests can be trusted. Each test is scored for empty
+assertions, assertion roulette, conditional logic, length, sleeps, hand-rolled
+try/catch and vague names, with file-level penalties for duplicated setup.
+Smells are graded rather than boolean — four assertions is not suddenly a smell
+when three was fine. Under 10 is healthy, 25+ means the suite is probably lying
+to you.
+
+**As of 2026-08-20: weighted SCRAP 1.0, no smells outstanding. `dry.py` reports
+1.2% duplication.**
+
+Both found real problems on their first run, which is the only reason they are
+worth keeping:
+
+- SCRAP flagged **four tests with no assertions** — "does not crash" tests that
+  would have passed if the method became an empty stub. They now assert real
+  post-conditions.
+- One of those, once given a post-condition, **crashed the test runner** and
+  exposed a genuine bug: tapping Talk then immediately Stop raced startup
+  against teardown and installed an audio tap on a torn-down engine. Guarded by
+  `shouldAbort` in `IosTranscriber`.
+- `dry.py` found the test suite carrying **its own copy of the production
+  screen dispatch** — a parallel `CurrentScreenForTest` that could silently
+  diverge from `CurrentScreen` and let navigation tests pass while the real app
+  was broken. Deleted; the tests use the real one.
+
+A caveat learned the hard way: SCRAP's duplicate-setup rule originally flagged a
+single repeated factory call (`val s = state()` at the top of each test). That
+is deliberate isolation, not duplication, and penalising it punishes the better
+pattern. It now requires a shared prefix of at least two lines.
+
 ## Toolchain
 
 Kotlin 2.2.20 · Compose 1.9.0 · AGP 8.7.3 · SQLDelight 2.1.0 · JVM 17 ·

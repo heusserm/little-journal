@@ -33,13 +33,23 @@ final class IosTranscriber: NSObject, Transcriber {
     private var resultsTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
 
+    /// Set by stop(). Startup is a sequence of awaits, and cancelling the task
+    /// does not stop the work already in flight -- without this, a user who taps
+    /// Talk and immediately Stop can have startEngine() install a tap on an
+    /// engine that stop() has already torn down, which crashes.
+    private var stopped = false
+
+    private var shouldAbort: Bool { stopped || Task.isCancelled }
+
     // MARK: Transcriber
 
     func start(listener: TranscriberListener) {
+        stopped = false
         startTask = Task { await self.begin(listener) }
     }
 
     func stop() {
+        stopped = true
         startTask?.cancel()
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
@@ -60,10 +70,11 @@ final class IosTranscriber: NSObject, Transcriber {
 
     private func begin(_ listener: TranscriberListener) async {
         do {
-            guard await authorize(listener) else { return }
+            guard await authorize(listener), !shouldAbort else { return }
             try configureSession()
-            guard let transcriber = try await prepareTranscriber(listener) else { return }
+            guard let transcriber = try await prepareTranscriber(listener), !shouldAbort else { return }
             try await startAnalysis(transcriber, listener)
+            guard !shouldAbort else { return }
             onMain { listener.onStatus(message: "Listening") }
         } catch {
             onMain { listener.onError(message: error.localizedDescription) }
@@ -154,6 +165,8 @@ final class IosTranscriber: NSObject, Transcriber {
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         self.analyzer = analyzer
         try await analyzer.start(inputSequence: stream)
+
+        guard !shouldAbort else { return }
 
         resultsTask = Task { [weak self] in
             await self?.pump(transcriber, listener)

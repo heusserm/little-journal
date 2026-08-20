@@ -49,7 +49,7 @@ class DayScreenUiTest {
     @Test
     fun `New opens an editor already pointed at this day`() = runComposeUiTest {
         val state = stateOn(day)
-        setContent { MaterialTheme { CurrentScreenForTest(state) } }
+        setContent { MaterialTheme { CurrentScreen(state) } }
 
         onNodeWithText("New").performClick()
 
@@ -60,7 +60,7 @@ class DayScreenUiTest {
     @Test
     fun `back from a day returns to the calendar`() = runComposeUiTest {
         val state = stateOn(day)
-        setContent { MaterialTheme { CurrentScreenForTest(state) } }
+        setContent { MaterialTheme { CurrentScreen(state) } }
 
         onNodeWithText("‹ Calendar").performClick()
 

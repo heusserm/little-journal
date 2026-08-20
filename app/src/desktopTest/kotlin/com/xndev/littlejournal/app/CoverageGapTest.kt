@@ -32,9 +32,18 @@ class TranscriberContractTest {
     }
 
     @Test
-    fun `stopping the no-op transcriber is harmless`() {
+    fun `stopping the no-op transcriber leaves it usable`() {
         NoopTranscriber.stop()
         NoopTranscriber.stop()
+
+        var reported: String? = null
+        NoopTranscriber.start(object : TranscriberListener {
+            override fun onPartial(text: String) {}
+            override fun onFinal(text: String) {}
+            override fun onStatus(message: String) {}
+            override fun onError(message: String) { reported = message }
+        })
+        assertTrue(reported != null, "stop must not leave it silently broken")
     }
 
     @Test

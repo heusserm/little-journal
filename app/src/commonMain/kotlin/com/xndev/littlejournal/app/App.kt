@@ -73,7 +73,7 @@ private fun JournalNavBar(state: JournalState) {
 }
 
 @Composable
-private fun CurrentScreen(state: JournalState) {
+internal fun CurrentScreen(state: JournalState) {
     when (val screen = state.screen) {
         is Screen.Today -> TodayScreen(state)
         is Screen.Calendar -> CalendarScreen(state)

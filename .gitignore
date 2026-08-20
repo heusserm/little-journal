@@ -29,3 +29,7 @@ journal.db-wal
 iosApp/dd/
 iosApp/dd-device/
 iosApp/iosApp.xcodeproj/
+
+# Xcode result bundles from -resultBundlePath
+iosApp/cov.xcresult/
+iosApp/*.xcresult/

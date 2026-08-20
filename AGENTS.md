@@ -204,15 +204,39 @@ python3 tools/dry.py --tests --loose --show   # include tests, ignore literals
 ```
 
 **SCRAP** is the mirror of CRAP: CRAP asks how risky a production method is,
-SCRAP asks how much the tests can be trusted. Each test is scored for empty
-assertions, assertion roulette, conditional logic, length, sleeps, hand-rolled
-try/catch and vague names, with file-level penalties for duplicated setup.
-Smells are graded rather than boolean — four assertions is not suddenly a smell
-when three was fine. Under 10 is healthy, 25+ means the suite is probably lying
-to you.
+SCRAP asks how much the tests can be trusted. The model, smell set and weights
+are adapted from **Robert C. Martin's SCRAP for Speclj**
+(<https://github.com/unclebob/scrap>); only the parsing is ours, because Kotlin
+and Swift have no reader and must be measured by brace matching.
 
-**As of 2026-08-20: weighted SCRAP 1.0, no smells outstanding. `dry.py` reports
-1.2% duplication.**
+```
+SCRAP      = complexity_score + smell_penalties
+complexity = 1 + branches + setup_depth + helper_calls + hidden_lines/8
+```
+
+Squaring mirrors CRAP — structure compounds — and saturates so one bad test
+cannot swamp a file. Under 10 healthy, 25+ means the suite is probably lying to
+you. Reports mean *and* max per file, because one terrible test hides inside a
+good average.
+
+Two ideas taken from the original are worth knowing, because both correct
+mistakes the obvious implementation makes:
+
+- **Hidden lines.** A five-line test calling a forty-line helper is not a
+  five-line test. Helper bodies count toward the caller.
+- **Extraction pressure.** Duplication is Jaccard similarity over each test's
+  setup/assert feature sets, then clustered — not text comparison. A repeated
+  one-line factory call is deliberate isolation and must not be penalised; six
+  tests assembling the same fixture differently should be.
+
+Exemptions matter as much as rules: table-driven tests legitimately branch, and
+contract tests legitimately assert once over many lines. Flagging those trains
+people to ignore the tool.
+
+`--write-baseline` and `--compare` track drift over time.
+
+**As of 2026-08-20: mean SCRAP 6.0 across 110 tests, worst 25. `dry.py` reports
+1.2% duplication.** A baseline is committed at `tools/.scrap-baseline.json`.
 
 Both found real problems on their first run, which is the only reason they are
 worth keeping:

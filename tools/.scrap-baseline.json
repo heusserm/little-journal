@@ -1,0 +1,178 @@
+{
+  "app/src/commonTest/kotlin/com/xndev/littlejournal/app/HelpersTest.kt": {
+    "max": 4,
+    "mean": 1.75,
+    "tests": {
+      "an empty tag string yields no tags": 1,
+      "dates render as a readable label": 1,
+      "entry counts are pluralised": 4,
+      "tags are trimmed, lowercased, de-hashed and de-duplicated": 1
+    }
+  },
+  "app/src/commonTest/kotlin/com/xndev/littlejournal/app/SpokenTextTest.kt": {
+    "max": 6,
+    "mean": 2.06,
+    "tests": {
+      "an empty string survives": 1,
+      "clock boundaries are handled": 1,
+      "dotted times become clock times": 1,
+      "every time preposition is recognised": 4,
+      "hours above twelve are treated as quantities": 1,
+      "impossible clock readings are left alone": 1,
+      "matching is case insensitive": 1,
+      "minute sixty and beyond is not a time": 1,
+      "numbers without a time preposition are left alone": 1,
+      "ordinary text is untouched": 4,
+      "quantities are left alone": 1,
+      "run-together digits become clock times": 6,
+      "several times in one entry all get fixed": 1,
+      "text with no numbers at all is returned unchanged": 4,
+      "the same number without a unit is read as a time": 1,
+      "units after the number keep it a quantity": 4
+    }
+  },
+  "app/src/desktopTest/kotlin/com/xndev/littlejournal/app/CoverageGapTest.kt": {
+    "max": 16,
+    "mean": 5.82,
+    "tests": {
+      "a busy day shows three dots and no more": 16,
+      "a card shows mood, tags and that it was spoken": 9,
+      "a month with no entries still renders every day": 9,
+      "a plain typed card shows only its word count": 9,
+      "an entry dated to another day renders its date on the card": 9,
+      "recognizer status messages reach the user": 1,
+      "stopping dictation clears any lingering status and partial": 1,
+      "stopping the no-op transcriber leaves it usable": 1,
+      "stopping when not dictating does nothing": 4,
+      "the live transcript shows both the partial text and the status": 4,
+      "the no-op transcriber refuses politely instead of failing silently": 1
+    }
+  },
+  "app/src/desktopTest/kotlin/com/xndev/littlejournal/app/DayAndNavigationUiTest.kt": {
+    "max": 16,
+    "mean": 8.33,
+    "tests": {
+      "New opens an editor already pointed at this day": 9,
+      "a day lists every entry written for it": 16,
+      "an empty day says so rather than showing nothing at all": 16,
+      "an entry written on today is reachable from the calendar": 4,
+      "back from a day returns to the calendar": 9,
+      "the app opens on today": 4,
+      "the calendar tab shows the current month": 4,
+      "the day header names the date being viewed": 9,
+      "the search tab invites a query": 4
+    }
+  },
+  "app/src/desktopTest/kotlin/com/xndev/littlejournal/app/JournalStatePagingTest.kt": {
+    "max": 16,
+    "mean": 8.73,
+    "tests": {
+      "a blank body is refused even when an entry id is supplied": 9,
+      "deleting removes the entry from the day and from the counts": 4,
+      "editing an entry loads it and opens the editor on its date": 4,
+      "jumping to the current month undoes any amount of paging": 9,
+      "month counts only describe the month being shown": 14,
+      "opening a day loads exactly that day's entries": 4,
+      "paging across a year boundary works": 16,
+      "paging back and forward returns to where it started": 14,
+      "saving an existing entry updates it rather than creating a second": 9,
+      "search results refresh after an entry is edited": 9,
+      "the calendar opens on the current month": 4
+    }
+  },
+  "app/src/desktopTest/kotlin/com/xndev/littlejournal/app/JournalStateTest.kt": {
+    "max": 9,
+    "mean": 5.18,
+    "tests": {
+      "a final result clears the outstanding partial": 4,
+      "a spoken draft gets its times cleaned up and is marked dictated": 4,
+      "a typed draft is stored verbatim and marked typed": 9,
+      "an empty draft is not saved": 4,
+      "an error stops dictation and surfaces the message": 4,
+      "back from a day returns to the calendar": 4,
+      "back from an entry returns to the day it belongs to": 4,
+      "committing clears the draft and stops dictation": 4,
+      "dictation is offered only when the platform supports it": 9,
+      "dictation is refused when the platform cannot do it": 9,
+      "final results accumulate into the draft, separated by spaces": 4,
+      "partial text is shown but never becomes part of the entry": 4,
+      "saving refreshes the calendar counts": 4,
+      "search finds saved entries and a blank query clears the results": 9,
+      "starting dictation asks the transcriber and marks itself active": 4,
+      "the next dictated entry does not inherit the previous one's speech flag": 4,
+      "toggling twice stops the transcriber": 4
+    }
+  },
+  "app/src/desktopTest/kotlin/com/xndev/littlejournal/app/ScreenUiTest.kt": {
+    "max": 21,
+    "mean": 14.38,
+    "tests": {
+      "an entry written today can be found by searching for it": 16,
+      "save stays disabled until something has been written": 14,
+      "search invites a query and reports when nothing matches": 21,
+      "the calendar renders the whole month including the final week": 9,
+      "the editor shows a moved-from note only after the date changes": 14,
+      "the talk button is absent when the platform cannot dictate": 16,
+      "the talk button is offered when the platform can dictate": 16,
+      "writing and saving puts the entry on the page": 9
+    }
+  },
+  "iosApp/iosAppTests/IosTranscriberTests.swift": {
+    "max": 9,
+    "mean": 6.4,
+    "tests": {
+      "testConversionKeepsAudioRatherThanEmittingSilence": 9,
+      "testDownsamplingProducesProportionallyFewerFrames": 9,
+      "testEnvironmentIsNamedHonestly": 9,
+      "testNilConverterPassesTheBufferThroughUnchanged": 4,
+      "testTranscriberReportsItselfAvailable": 1
+    }
+  },
+  "iosApp/iosAppTests/TranscriberLifecycleTests.swift": {
+    "max": 25,
+    "mean": 9.2,
+    "tests": {
+      "testASwiftListenerSatisfiesTheKotlinProtocol": 25,
+      "testStartThenImmediateStopProducesNoTranscript": 1,
+      "testStartingReportsBackRatherThanFailingSilently": 18,
+      "testStoppingBeforeStartingLeavesItUsable": 1,
+      "testStoppingTwiceLeavesItUsable": 1
+    }
+  },
+  "storage/src/jvmTest/kotlin/com/xndev/littlejournal/storage/JournalRepositoryTest.kt": {
+    "max": 9,
+    "mean": 5.18,
+    "tests": {
+      "a date range includes its endpoints and excludes what lies outside": 4,
+      "a day holds many entries, ordered by when they were written": 9,
+      "a deleted entry disappears from its tag": 4,
+      "an entry can be moved to another day without changing when it was written": 9,
+      "calendar counts group by day and ignore deleted entries": 4,
+      "deleting leaves a tombstone rather than removing the row": 9,
+      "editing an entry replaces its tags rather than accumulating them": 4,
+      "entries are found by tag, and tag usage is counted": 4,
+      "live count ignores tombstones": 4,
+      "mood and source survive a round trip": 4,
+      "on this day finds the same date in earlier years only": 4,
+      "reassigning an entry that does not exist returns null rather than throwing": 4,
+      "search honours its limit": 9,
+      "search matches body text and skips deleted entries": 4,
+      "tags round-trip and are queryable": 4,
+      "what save returns is exactly what a later read returns": 4,
+      "word count handles empty and whitespace-only bodies": 4
+    }
+  },
+  "storage/src/jvmTest/kotlin/com/xndev/littlejournal/storage/PersistenceTest.kt": {
+    "max": 7,
+    "mean": 2.29,
+    "tests": {
+      "changed since returns rows in the order they were touched": 1,
+      "desktopRepository opens a working file-backed journal": 7,
+      "device id is recorded on entries so sync can attribute them later": 1,
+      "entries survive closing and reopening the database": 1,
+      "inMemoryRepository starts empty every time": 1,
+      "reopening does not duplicate or reset existing rows": 1,
+      "the database file is actually created on disk": 4
+    }
+  }
+}

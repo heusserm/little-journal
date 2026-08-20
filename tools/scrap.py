@@ -1,68 +1,82 @@
 #!/usr/bin/env python3
-"""SCRAP — a test-quality score for Kotlin and Swift test suites.
+"""SCRAP — structural quality score for Kotlin and Swift test suites.
 
-CRAP asks "how risky is this production method?". SCRAP asks the mirror
-question: "how much should I trust these tests?"
+Adapted from Robert C. Martin's SCRAP for Speclj specs
+(https://github.com/unclebob/scrap). The model, the smell set and the weights
+are his; the parsing is rewritten for Kotlin and Swift, which have no reader
+and so are measured by brace matching rather than by walking forms.
 
-Each test is measured for size, branching, assertion density and a handful of
-well-known test smells. Smells are graded rather than boolean -- a test with
-four assertions is not suddenly Assertion Roulette when three was fine -- so
-each contributes a penalty scaled by fuzzy membership between a "clean" and a
-"clearly bad" threshold. A file's SCRAP is the mean per-test penalty plus
-file-level penalties.
+CRAP asks how risky a production method is. SCRAP asks the mirror question:
+how much should these tests be trusted?
 
-    SCRAP 0-10    healthy
-    SCRAP 10-25   worth a look
-    SCRAP 25+     the suite is probably lying to you
+    SCRAP = complexity_score + smell_penalties
 
-Usage:
-    python3 tools/scrap.py [path ...]        # defaults to this repo's tests
-    python3 tools/scrap.py --detail          # per-test breakdown
+    complexity = 1 + branches + setup_depth + helper_calls + hidden_lines/8
 
-Heuristics, not a compiler: bodies are found by brace matching. Treat it as a
-smell detector, which is all it claims to be.
+`complexity_score` squares that and saturates, so one gnarly test cannot swamp
+a file's average. Squaring mirrors CRAP: structure compounds.
+
+Two ideas carried over from the original are worth stating, because both
+correct mistakes an obvious implementation makes:
+
+  * Hidden lines. A five-line test calling a forty-line helper is not a
+    five-line test. Helper bodies count toward the example that calls them.
+
+  * Extraction pressure. Duplication is measured by Jaccard similarity over
+    each test's setup/assert/fixture feature sets, then clustered — not by
+    comparing text. A repeated one-line factory call is deliberate isolation
+    and must not be penalised; six tests that assemble the same elaborate
+    fixture differently should be.
+
+Exemptions matter as much as the rules. A table-driven test legitimately
+branches. A contract test legitimately makes one assertion over many lines.
+Flagging those trains people to ignore the tool.
+
+Output is decision support, not instruction. Confirm against the actual test
+before refactoring anything.
+
+    python3 tools/scrap.py                  # report
+    python3 tools/scrap.py --verbose        # per-test metric dump
+    python3 tools/scrap.py --json           # machine readable
+    python3 tools/scrap.py --write-baseline # save to tools/.scrap-baseline.json
+    python3 tools/scrap.py --compare        # diff against that baseline
 """
+import argparse
+import json
+import math
 import re
 import sys
+from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 
-# ---------------------------------------------------------------- fuzzy bits
+DEFAULT_GLOBS = ["app/src/*Test/**/*.kt", "storage/src/*Test/**/*.kt",
+                 "iosApp/iosAppTests/*.swift"]
+BASELINE = Path("tools/.scrap-baseline.json")
 
-def ramp(x, lo, hi):
-    """0 below lo, 1 above hi, linear between. The 'fuzzy' in fuzzy logic."""
-    if x <= lo:
-        return 0.0
-    if x >= hi:
-        return 1.0
-    return (x - lo) / (hi - lo)
-
-
-# Each smell: (weight, description). Penalty = weight * membership.
+# Weights are Uncle Bob's, unchanged.
 SMELLS = {
-    "empty":        (30, "no assertions at all — passes no matter what"),
-    "roulette":     (12, "many unexplained assertions — a failure won't say which"),
-    "conditional":  (14, "branching inside the test — it tests different things per run"),
-    "long":         (10, "long enough that its intent is hard to see"),
-    "complex":      (12, "control flow of its own, so the test itself can be wrong"),
-    "sleepy":       (16, "sleeps — slow and flaky"),
-    "exception":    (8,  "hand-rolled try/catch instead of an assertion"),
-    "print":        (4,  "prints instead of asserting"),
-    "vague_name":   (6,  "name does not describe the behaviour under test"),
-    "duplicate":    (10, "setup repeated across tests instead of shared"),
+    "no-assertions":            (10, "passes no matter what the code does"),
+    "low-assertion-density":    (6,  "one assertion buried in a long example"),
+    "multiple-phases":          (5,  "several act/assert cycles in one test"),
+    "high-mocking":             (4,  "so many fakes the test may only test fakes"),
+    "large-example":            (4,  "long enough that its intent is hard to see"),
+    "helper-hidden-complexity": (4,  "most of the test lives somewhere else"),
+    "temp-resource-work":       (3,  "files, threads or processes — slow and flaky"),
+    "literal-heavy-setup":      (3,  "large inline data obscures the behaviour"),
 }
-
-# ------------------------------------------------------------------ parsing
-
-KOTLIN_TEST = re.compile(r'@Test\b')
-FUNC = re.compile(r'^\s*(?:override\s+|private\s+|internal\s+|public\s+)*(?:fun|func)\s+(`[^`]+`|[A-Za-z_]\w*)')
-SETUP = re.compile(r'@(BeforeTest|Before|BeforeEach)\b|func\s+setUp\s*\(|fun\s+setUp\s*\(')
+COMPLEXITY_CAP = 49          # a test scoring 7 on structure is already the worst news
+DUPLICATION_THRESHOLD = 0.62  # Jaccard, above which two tests are "the same shape"
 
 ASSERT = re.compile(r'\b(assert\w*|fail|XCTAssert\w*|XCTFail|XCTUnwrap)\s*\(')
-BRANCH = re.compile(r'\b(if|when|for|while)\s*[\(\{]')
-DECISION = re.compile(r'\bif\b|\bfor\b|\bwhile\b|\bcatch\b|&&|\|\|')
-SLEEP = re.compile(r'\b(Thread\.sleep|sleep\s*\(|usleep|delay\s*\()')
-TRYCATCH = re.compile(r'\bcatch\s*[\(\{]')
-PRINTING = re.compile(r'\b(println|print)\s*\(')
+BRANCH = re.compile(r'\b(if|when|for|while|guard)\b|&&|\|\||\?:|\bcatch\b')
+SCOPING = re.compile(r'\b(let|run|apply|also|with|forEach|repeat|setContent|runComposeUiTest)\s*[\({]')
+FAKE = re.compile(r'\b(Fake\w*|Mock\w*|Stub\w*|object\s*:)\b')
+TEMP = re.compile(r'\b(createTempFile|createTempDir|Thread|Runtime|ProcessBuilder|FileManager\.default)\b')
+FUNC = re.compile(r'^\s*(?:override\s+|private\s+|internal\s+|public\s+|fileprivate\s+)*(?:fun|func)\s+(`[^`]+`|[A-Za-z_]\w*)')
+TESTANNO = re.compile(r'@Test\b')
+IDENT = re.compile(r'[A-Za-z_]\w*')
+BIGSTRING = re.compile(r'"[^"\n]{60,}"')   # [^"] alone spans newlines and matches the gap between literals
 
 
 def strip_comments(lines):
@@ -71,237 +85,310 @@ def strip_comments(lines):
         s = ln
         if blk:
             if '*/' in s:
-                s = s.split('*/', 1)[1]
-                blk = False
+                s, blk = s.split('*/', 1)[1], False
             else:
+                out.append("")
                 continue
         if '/*' in s:
             b, _, a = s.partition('/*')
-            if '*/' in a:
-                s = b + a.split('*/', 1)[1]
-            else:
-                s, blk = b, True
+            s, blk = (b + a.split('*/', 1)[1], False) if '*/' in a else (b, True)
         out.append(re.sub(r'//.*', '', s))
     return out
 
 
-def split_args(text):
-    """Top-level comma split, so nested calls and generics don't confuse us."""
-    args, depth, cur, instr = [], 0, "", False
-    for ch in text:
-        if ch == '"':
-            instr = not instr
-        if not instr:
-            if ch in '([<':
-                depth += 1
-            elif ch in ')]>':
-                depth -= 1
-            elif ch == ',' and depth == 0:
-                args.append(cur)
-                cur = ""
-                continue
-        cur += ch
-    if cur.strip():
-        args.append(cur)
-    return args
+def body_of(src, i):
+    """Body starting at the signature line i. Returns (lines, last_index).
+
+    Handles both braced bodies and expression bodies. Expression bodies have no
+    braces at all and may wrap across lines:
+
+        private fun freshState(canDictate: Boolean = true) =
+            JournalState(inMemoryRepository(), FakeTranscriber(...))
+
+    Naive brace matching runs past those to the next `{` it can find, which is
+    the following test — so the helper swallows a test and it vanishes from the
+    report. Scan forward for the opening brace, but give up if another
+    declaration or annotation appears first.
+    """
+    j = i
+    while j < len(src) and '{' not in src[j]:
+        if j > i and (FUNC.match(src[j]) or src[j].strip().startswith('@')):
+            return src[i:j], j - 1
+        j += 1
+    if j >= len(src):
+        return src[i:], len(src) - 1
+
+    depth, out = 0, []
+    for k in range(i, len(src)):
+        out.append(src[k])
+        if k >= j:
+            depth += src[k].count('{') - src[k].count('}')
+            if depth == 0:
+                return out, k
+    return out, len(src) - 1
 
 
-def assertions_in(body):
-    """Returns (total, number carrying an explanatory message)."""
-    total = explained = 0
-    for m in ASSERT.finditer(body):
-        start = m.end()
-        depth, i = 1, start
-        while i < len(body) and depth:
-            if body[i] == '(':
-                depth += 1
-            elif body[i] == ')':
-                depth -= 1
-            i += 1
-        inner = body[start:i - 1]
-        total += 1
-        args = split_args(inner)
-        if args and args[-1].strip().startswith('"'):
-            explained += 1
-    return total, explained
-
-
-def is_vague(name):
-    n = name.strip('`')
-    n = re.sub(r'^test', '', n)
-    words = re.findall(r'[a-z]+|[A-Z][a-z]*', n)
-    return len(words) < 3
-
-
-def extract_tests(path):
-    raw = path.read_text(errors='ignore').splitlines()
-    src = strip_comments(raw)
+def parse_file(path):
+    """Split a test file into tests and local helpers."""
+    src = strip_comments(path.read_text(errors='ignore').splitlines())
     swift = path.suffix == '.swift'
-    tests, has_setup, i = [], False, 0
+    tests, helpers = [], {}
+    i = 0
     while i < len(src):
-        if SETUP.search(src[i]):
-            has_setup = True
         m = FUNC.match(src[i])
         if not m:
             i += 1
             continue
-        name = m.group(1)
-        annotated = any(KOTLIN_TEST.search(src[j]) for j in range(max(0, i - 4), i))
-        is_test = annotated or (swift and name.startswith("test"))
-        j, depth, opened, body = i, 0, False, []
-        while j < len(src):
-            body.append(src[j])
-            for ch in src[j]:
-                if ch == '{':
-                    depth += 1
-                    opened = True
-                elif ch == '}':
-                    depth -= 1
-            if opened and depth == 0:
-                break
-            j += 1
-        if is_test:
-            text = '\n'.join(body)
-            lines = [b.strip() for b in body[1:-1] if b.strip()]
-            total, explained = assertions_in(text)
-            tests.append({
-                "name": name,
-                "loc": len(lines),
-                "lines": lines,
-                "assertions": total,
-                "explained": explained,
-                "branches": len(BRANCH.findall(text)),
-                "complexity": 1 + len(DECISION.findall(text)),
-                "sleeps": len(SLEEP.findall(text)),
-                "catches": len(TRYCATCH.findall(text)),
-                "prints": len(PRINTING.findall(text)),
-            })
-        i = j + 1
-    return tests, has_setup
+        name = m.group(1).strip('`')
+        annotated = any(TESTANNO.search(src[k]) for k in range(max(0, i - 4), i))
+        lines, end = body_of(src, i)
+        inner = [l.strip() for l in lines[1:-1] if l.strip()]
+        rec = {"name": name, "line": i + 1, "lines": inner, "text": "\n".join(lines)}
+        if annotated or (swift and name.startswith("test")):
+            tests.append(rec)
+        else:
+            helpers[name] = rec
+        i = end + 1
+    return tests, helpers
 
 
-# ------------------------------------------------------------------ scoring
+def setup_depth(lines):
+    """Deepest nesting of scoping constructs inside the test."""
+    depth = best = 0
+    for l in lines:
+        if SCOPING.search(l):
+            depth += 1
+            best = max(best, depth)
+        depth += l.count('{') - l.count('}')
+        depth = max(depth, 0)
+    return min(best, 6)
 
-def score_test(t):
-    """Returns (penalty, {smell: membership})."""
-    unexplained = t["assertions"] - t["explained"]
-    hits = {
-        "empty":       1.0 if t["assertions"] == 0 else 0.0,
-        "roulette":    ramp(unexplained, 3, 8),
-        "conditional": ramp(t["branches"], 0, 3),
-        "long":        ramp(t["loc"], 20, 45),
-        "complex":     ramp(t["complexity"], 2, 6),
-        "sleepy":      ramp(t["sleeps"], 0, 1),
-        "exception":   ramp(t["catches"], 0, 2),
-        "print":       ramp(t["prints"], 0, 2),
-        "vague_name":  1.0 if is_vague(t["name"]) else 0.0,
+
+def assertion_clusters(lines):
+    """Runs of assertions separated by other statements — act/assert cycles."""
+    clusters, inside = 0, False
+    for l in lines:
+        if ASSERT.search(l):
+            if not inside:
+                clusters += 1
+                inside = True
+        elif l.strip():
+            inside = False
+    return clusters
+
+
+def features(lines, kind):
+    """Token bag describing a test's shape, for similarity comparison."""
+    out = set()
+    for l in lines:
+        is_assert = bool(ASSERT.search(l))
+        if (kind == "assert") != is_assert:
+            continue
+        toks = [t for t in IDENT.findall(l) if len(t) > 2]
+        out.update(toks[:6])
+    return out
+
+
+def measure(t, helpers):
+    lines = t["lines"]
+    text = t["text"]
+    called = [h for h in helpers if re.search(r'\b' + re.escape(h) + r'\s*\(', text)]
+    hidden = sum(len(helpers[h]["lines"]) for h in called)
+    line_count = len(lines) + hidden
+    assertions = len(ASSERT.findall(text))
+    branches = len(BRANCH.findall(text))
+    table_driven = bool(re.search(r'\b(listOf|arrayOf|forEach|for\s*\()', text)) and assertions <= 2
+    # A contract test states one fact about a long interaction; that is not a smell.
+    contract = assertions == 1 and assertion_clusters(lines) == 1 and branches == 0
+    m = {
+        "name": t["name"], "line": t["line"],
+        "line_count": line_count, "raw_lines": len(lines), "hidden_lines": hidden,
+        "assertions": assertions, "branches": branches,
+        "setup_depth": setup_depth(lines), "helper_calls": len(called),
+        "fakes": len(FAKE.findall(text)), "temp": len(TEMP.findall(text)),
+        "big_literals": len(BIGSTRING.findall(text)),
+        "phases": assertion_clusters(lines),
+        "table_driven": table_driven, "contract": contract,
+        "assert_features": features(lines, "assert"),
+        "setup_features": features(lines, "setup"),
     }
-    penalty = sum(SMELLS[k][0] * v for k, v in hits.items())
-    return penalty, {k: v for k, v in hits.items() if v > 0}
+    scored_branches = 0 if table_driven else m["branches"]
+    m["complexity"] = 1 + scored_branches + m["setup_depth"] + m["helper_calls"] + hidden // 8
+    m["complexity_score"] = min(m["complexity"] ** 2, COMPLEXITY_CAP)
+
+    smells = []
+    if assertions == 0:
+        smells.append("no-assertions")
+    if assertions == 1 and line_count > 10 and not table_driven and not contract:
+        smells.append("low-assertion-density")
+    if m["phases"] > 1:
+        smells.append("multiple-phases")
+    if m["fakes"] > 3:
+        smells.append("high-mocking")
+    if line_count > 20 and not contract:
+        smells.append("large-example")
+    if hidden > 8:
+        smells.append("helper-hidden-complexity")
+    if m["temp"]:
+        smells.append("temp-resource-work")
+    if m["big_literals"]:
+        smells.append("literal-heavy-setup")
+    m["smells"] = smells
+    m["smell_penalty"] = sum(SMELLS[s][0] for s in smells)
+    m["scrap"] = m["complexity_score"] + m["smell_penalty"]
+    return m
 
 
-def duplicate_setup(tests, has_setup):
-    """How much identical opening code is repeated instead of shared.
+def jaccard(a, b):
+    u = a | b
+    return len(a & b) / len(u) if u else 0.0
 
-    Requires a shared prefix of at least two lines. A single repeated factory
-    call -- `val s = state()` at the top of every test -- is deliberate
-    isolation, not duplication, and flagging it punishes the better pattern.
-    """
-    if has_setup or len(tests) < 3:
-        return 0.0, 0
-    prefixes = {}
-    for t in tests:
-        if len(t["lines"]) >= 2:
-            prefixes.setdefault(tuple(t["lines"][:2]), []).append(t["name"])
-    worst = max((len(v) for v in prefixes.values()), default=0)
-    if worst < 3:
-        return 0.0, worst
-    return ramp(worst, 2, len(tests)), worst
+
+def extraction_pressure(measured):
+    """Clusters of tests with the same shape — where extraction would actually pay."""
+    def shape(m):
+        return m["assert_features"] | m["setup_features"]
+
+    adj = defaultdict(set)
+    for (i, a), (j, b) in combinations(list(enumerate(measured)), 2):
+        if jaccard(shape(a), shape(b)) >= DUPLICATION_THRESHOLD:
+            adj[i].add(j)
+            adj[j].add(i)
+    seen, groups = set(), []
+    for i in range(len(measured)):
+        if i in seen or i not in adj:
+            continue
+        stack, comp = [i], set()
+        while stack:
+            k = stack.pop()
+            if k in comp:
+                continue
+            comp.add(k)
+            stack.extend(adj[k] - comp)
+        seen |= comp
+        if len(comp) > 1:
+            groups.append(sorted(comp))
+    return groups
 
 
 def analyse(path):
-    tests, has_setup = extract_tests(path)
+    tests, helpers = parse_file(path)
     if not tests:
         return None
-    scored = [(t, *score_test(t)) for t in tests]
-    dup_mem, dup_n = duplicate_setup(tests, has_setup)
-    mean = sum(s[1] for s in scored) / len(scored)
-    scrap = mean + SMELLS["duplicate"][0] * dup_mem
+    measured = [measure(t, helpers) for t in tests]
+    groups = extraction_pressure(measured)
+    scores = [m["scrap"] for m in measured]
     return {
-        "path": path, "tests": scored, "scrap": scrap, "has_setup": has_setup,
-        "dup": (dup_mem, dup_n),
-        "assertions": sum(t["assertions"] for t in tests),
-        "loc": sum(t["loc"] for t in tests),
+        "path": str(path), "tests": measured,
+        "mean": sum(scores) / len(scores), "max": max(scores),
+        "assertions": sum(m["assertions"] for m in measured),
+        "clusters": [[measured[i]["name"] for i in g] for g in groups],
     }
 
 
-# -------------------------------------------------------------------- report
-
 def band(s):
-    return "healthy" if s < 10 else ("look" if s < 25 else "POOR")
+    return "healthy" if s < 10 else ("review" if s < 25 else "POOR")
 
 
-def main(argv):
-    detail = "--detail" in argv
-    args = [a for a in argv if not a.startswith("--")]
-    globs = args or ["app/src/*Test/**/*.kt", "storage/src/*Test/**/*.kt",
-                     "iosApp/iosAppTests/*.swift"]
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("paths", nargs="*")
+    ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--write-baseline", action="store_true")
+    ap.add_argument("--compare", action="store_true")
+    a = ap.parse_args(argv)
+
     files = []
-    for g in globs:
+    for g in (a.paths or DEFAULT_GLOBS):
         p = Path(g)
         files.extend([p] if p.is_file() else sorted(Path('.').glob(g)))
-
     results = [r for r in (analyse(f) for f in sorted(set(files))) if r]
     if not results:
         print("no test files found")
         return 1
-    results.sort(key=lambda r: -r["scrap"])
+    results.sort(key=lambda r: -r["mean"])
 
-    print(f"{'SCRAP':>6} {'band':<8} {'tests':>5} {'asserts':>7} {'a/test':>6}  file")
+    if a.json or a.write_baseline:
+        payload = {r["path"]: {"mean": round(r["mean"], 2), "max": r["max"],
+                               "tests": {t["name"]: t["scrap"] for t in r["tests"]}}
+                   for r in results}
+        if a.write_baseline:
+            BASELINE.write_text(json.dumps(payload, indent=2, sort_keys=True))
+            print(f"baseline written to {BASELINE}")
+            return 0
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    print(f"{'mean':>6} {'max':>5} {'band':<8} {'tests':>5} {'asrt':>5}  file")
     print("-" * 92)
     for r in results:
-        n = len(r["tests"])
-        print(f"{r['scrap']:>6.1f} {band(r['scrap']):<8} {n:>5} {r['assertions']:>7} "
-              f"{r['assertions']/n:>6.1f}  {r['path']}")
-
-    total_tests = sum(len(r["tests"]) for r in results)
-    total_asserts = sum(r["assertions"] for r in results)
-    overall = sum(r["scrap"] * len(r["tests"]) for r in results) / total_tests
+        print(f"{r['mean']:>6.1f} {r['max']:>5} {band(r['mean']):<8} {len(r['tests']):>5} "
+              f"{r['assertions']:>5}  {r['path']}")
+    allt = [t for r in results for t in r["tests"]]
+    overall = sum(t["scrap"] for t in allt) / len(allt)
     print("-" * 92)
-    print(f"{len(results)} files | {total_tests} tests | {total_asserts} assertions | "
-          f"{total_asserts/total_tests:.1f} per test | weighted SCRAP {overall:.1f} ({band(overall)})")
+    print(f"{len(results)} files | {len(allt)} tests | mean SCRAP {overall:.1f} ({band(overall)}) "
+          f"| worst {max(t['scrap'] for t in allt)}")
 
-    findings = {}
+    worst = sorted(allt, key=lambda t: -t["scrap"])[:8]
+    if worst and worst[0]["scrap"] > 4:
+        print("\nWorst examples")
+        print("-" * 92)
+        for t in worst:
+            if t["scrap"] <= 4:
+                break
+            print(f"  {t['scrap']:>4}  cx {t['complexity']:>2}  lines {t['line_count']:>3} "
+                  f"({t['hidden_lines']} hidden)  asrt {t['assertions']:>2}  "
+                  f"{t['name'][:44]:<46} {', '.join(t['smells']) or '—'}")
+
+    found = defaultdict(list)
     for r in results:
-        for t, pen, hits in r["tests"]:
-            for k in hits:
-                findings.setdefault(k, []).append((r["path"].name, t["name"], hits[k]))
-        if r["dup"][0] > 0:
-            findings.setdefault("duplicate", []).append((r["path"].name, f"{r['dup'][1]} tests share a first line", r["dup"][0]))
-
-    if findings:
-        print("\nSmells found")
+        for t in r["tests"]:
+            for s in t["smells"]:
+                found[s].append((Path(r["path"]).name, t["name"]))
+    if found:
+        print("\nSmells")
         print("-" * 92)
-        for k in sorted(findings, key=lambda k: -SMELLS[k][0]):
-            items = sorted(findings[k], key=lambda x: -x[2])
-            print(f"\n  {k}  ({SMELLS[k][1]})")
-            for f, name, mem in items[:6]:
-                print(f"      {mem:4.0%}  {name.strip('`')[:56]:<58} {f}")
-            if len(items) > 6:
-                print(f"      … and {len(items)-6} more")
+        for s in sorted(found, key=lambda s: -SMELLS[s][0]):
+            print(f"\n  {s} (+{SMELLS[s][0]}) — {SMELLS[s][1]}")
+            for f, n in found[s][:5]:
+                print(f"      {n[:56]:<58} {f}")
+            if len(found[s]) > 5:
+                print(f"      … and {len(found[s]) - 5} more")
 
-    if detail:
-        print("\nPer-test detail")
+    pressure = [(r, c) for r in results for c in r["clusters"]]
+    if pressure:
+        print("\nExtraction pressure — tests sharing a shape, where a fixture would pay")
         print("-" * 92)
+        for r, c in pressure[:6]:
+            print(f"  {Path(r['path']).name}: {len(c)} tests")
+            for n in c[:4]:
+                print(f"      {n[:70]}")
+            if len(c) > 4:
+                print(f"      … and {len(c) - 4} more")
+
+    if a.compare:
+        if not BASELINE.exists():
+            print("\nno baseline; run --write-baseline first")
+            return 0
+        old = json.loads(BASELINE.read_text())
+        print("\nAgainst baseline")
+        print("-" * 92)
+        moved = False
         for r in results:
-            print(f"\n{r['path']}")
-            for t, pen, hits in sorted(r["tests"], key=lambda x: -x[1]):
-                tag = " ".join(sorted(hits)) or "clean"
-                print(f"  {pen:5.1f}  loc {t['loc']:>3}  cx {t['complexity']:>2}  "
-                      f"asserts {t['assertions']:>2} ({t['explained']} explained)  "
-                      f"{t['name'].strip('`')[:44]:<46} {tag}")
+            was = old.get(r["path"], {}).get("mean")
+            if was is None:
+                print(f"  new     {r['path']} ({r['mean']:.1f})")
+                moved = True
+            elif abs(was - r["mean"]) >= 0.05:
+                arrow = "worse" if r["mean"] > was else "better"
+                print(f"  {arrow:<7} {r['path']}  {was:.1f} -> {r['mean']:.1f}")
+                moved = True
+        if not moved:
+            print("  unchanged")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

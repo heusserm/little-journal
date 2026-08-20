@@ -6,3 +6,6 @@ import com.xndev.littlejournal.db.JournalDatabase
 
 fun iosDriver(name: String = "littlejournal.db"): SqlDriver =
     NativeSqliteDriver(JournalDatabase.Schema, name)
+
+fun iosRepository(deviceId: String = "ios"): JournalRepository =
+    JournalRepository(JournalDatabase(iosDriver()), deviceId)

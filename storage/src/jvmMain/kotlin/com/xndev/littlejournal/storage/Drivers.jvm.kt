@@ -16,3 +16,10 @@ fun fileDriver(path: String): SqlDriver {
     if (isNew) JournalDatabase.Schema.create(driver)
     return driver
 }
+
+/**
+ * Ready-to-use repository backed by a file. Keeps SqlDriver and the generated
+ * database type out of the app module's API surface.
+ */
+fun desktopRepository(path: String, deviceId: String = "desktop"): JournalRepository =
+    JournalRepository(JournalDatabase(fileDriver(path)), deviceId)

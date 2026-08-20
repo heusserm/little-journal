@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "LittleJournal"
 
 include(":storage")
+include(":app")

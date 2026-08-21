@@ -632,62 +632,103 @@ never run and is now redundant.
 
 ## Status
 
+Last worked on 2026-08-20.
+
 Storage, UI, the iOS wrapper, dictation, spoken-time cleanup and word-indexed
-search are built and committed. Runs on the iOS simulator and installs on a physical
-device.
+search are built and committed. Not built: **daily prompts, export/import,
+Android dictation, a lock**. Nothing is on the App Store.
 
-Not built: daily prompts, export/import, Android dictation. Nothing is on the
-App Store.
+### Where each platform stands
 
-### App Store readiness
+| Platform | State |
+|---|---|
+| **iPhone** | Runs on device. Dictation verified with real speech. The primary target. |
+| **iPad** | Runs. Layout capped and centred; see below. Declared via `TARGETED_DEVICE_FAMILY: "1,2"`. |
+| **Android** | Runs on API 28. Storage, migration, indexing and search all verified. No dictation. |
+| **Desktop** | Dev target only. Runs, builds a DMG, not for distribution. |
 
-Now that dictation is verified, what is actually left:
+### What to pick up next
 
-* **iPad has now been run** (2026-08-20, iPad Pro 13-inch, iOS 26.5) and the
-  layout is fixed. It never crashed; it stretched. Every screen ran edge to
-  edge on a thirteen-inch canvas — a compose box that wide is unpleasant to
-  write in, and the calendar's day cells inflated into empty squares. The
-  month grid did *not* overlap, which was the suspected fault and was wrong.
-  Content is now capped at `ReadableWidth` (640dp) and centred in `App.kt`,
-  which is the single point every screen passes through; the tab bar stays
-  full width, as iPad users expect. `TabletLayoutTest` pins this at 1400x1000
-  and both of its assertions were confirmed to fail against the old layout.
-* **Release signing does not exist.** `CODE_SIGN_STYLE` is Automatic and only
-  Debug has ever been built; distribution needs a certificate and profile.
-* **No privacy policy URL and no support URL.** Both are mandatory.
-* No App Store Connect record, description, keywords, age rating, or
-  screenshots. Screenshots follow `~/Code/AppStoreScreenshots`.
-* **No export**, so a user cannot get their own writing out of the app.
+In the order worth doing, and why:
 
-Already handled, and worth not re-doing: `ITSAppUsesNonExemptEncryption` is
-set, so export compliance is skipped; the microphone and speech usage strings
-are specific about on-device processing; and the privacy labels should be
-short and true — no network, no accounts, no analytics, audio never retained.
+1. **A lock — Face ID or passcode.** The one gap that is disqualifying rather
+   than merely missing. A journal is the archetypal private thing and every
+   competitor has this; a paid journal without it earns one-star reviews that
+   say exactly that. `LocalAuthentication`, small and well-trodden.
+2. **Export.** There is no way for a user to get their own writing out — no
+   sync, no backup, no export. For a journal that is a data-safety gap more
+   than a missing feature. Deferred deliberately on 2026-08-20, not forgotten.
+3. **Store assets and release signing.** An App Store Connect record,
+   description, keywords, age rating, screenshots (in
+   `~/Code/AppStoreScreenshots`, never in this repo), and the two mandatory
+   URLs — privacy policy and support. Signing needs a distribution certificate
+   and profile; `CODE_SIGN_STYLE` is still Automatic and only Debug has ever
+   been built.
+4. Then, in no strong order: daily prompts (`prompt_id` exists, nothing writes
+   it), a screen for browsing by tag or mood (the queries exist *and are
+   tested*, there is simply no UI — the cheapest real feature left), Android
+   dictation, phrase search, encryption at rest.
 
-**Worth deciding deliberately:** the iOS 26 deployment target exists only
-because `SpeechAnalyzer` requires it. Storage, UI and search would run years
-further back, so that one feature is costing every user not on the newest OS.
+### Open decisions
+
+* **The iOS 26 floor exists only because `SpeechAnalyzer` requires it.**
+  Storage, UI and search would run years further back, so one feature is
+  costing every user not on the newest OS. Falling back to
+  `SFSpeechRecognizer` below 26 would widen reach considerably.
+* **Pricing, if it is ever sold.** $0.99 nets about 70 cents, so $1,000 means
+  roughly 1,400 sales — a discovery problem, not a feature problem, and that
+  tier signals low value without helping. $2.99–$4.99, or free with no IAP.
+  Not settled.
+
+### What is verified, and what is only assumed
+
+Being precise about this, because the gaps are where the next bug lives:
+
+* **Dictation works against real human speech** — Matt's iPhone 17 Pro, build
+  100. That retires the risk this file carried from the start. Take it for
+  what it is: one person, one device, one session, judged by ear rather than
+  against a transcript. It says dictation is not broken, not that it is
+  accurate across accents, noise or long entries.
+* **`pump` and `prepareTranscriber` are still CRAP 20.0 at 0% coverage** and
+  unreachable from the Simulator. If dictation ever misbehaves visibly — text
+  twice, partials never settling, finals lost — start at `pump`. Its logic is
+  separable from the recognizer stream it reads, so it could be made testable.
+* **iPad: Today was confirmed visually; the calendar was not.** The month grid
+  is covered by `TabletLayoutTest` at 1400x1000, which is the same Compose
+  layout code and fails against the old layout, but no post-fix screenshot was
+  taken on the device itself. Simulator's window stopped being reachable to UI
+  automation mid-session.
+* **Android has no automated tests at all.** Everything above was checked by
+  hand on one emulator.
+
+### The three platform findings worth keeping
+
+**iPad never crashed; it stretched.** Every screen ran edge to edge on a
+thirteen-inch canvas — a compose box that wide is unpleasant to write in, and
+the calendar's day cells inflated into empty squares. The month grid did *not*
+overlap, which was the suspected fault and was wrong. Content is now capped at
+`ReadableWidth` (640dp) and centred in `App.kt`, the single point every screen
+passes through; the tab bar stays full width, as iPad users expect.
 
 **Android was run for the first time on 2026-08-20**, on an API 28 emulator —
-the oldest available, and the closest thing to the minSdk 26 floor. It had
-never been launched before, only compiled. It works: the app starts with no
-`ClassNotFoundException`, the Talk button is correctly absent and the
+the oldest available and the closest thing to the minSdk 26 floor. It starts
+with no `ClassNotFoundException`, the Talk button is correctly absent and the
 placeholder reads "What happened today?", an entry saves and indexes, and
 search matches whole words and multiple terms. A planted schema-1 database
 migrated to 2, kept both entries and backfilled 16 words, and a prefix search
 for "kayak" found the migrated "Kayaking on the loch" through the real UI.
 
-Two things that only Android could have told us, both of which held: SQLite
-3.22 accepts the empty `IN ()` that a no-results search produces, and the
-`AndroidSqliteDriver` upgrade path runs `1.sqm` correctly. Note the Android
-database stamps `user_version = 1` on create, where the desktop one stamped 0
-— which is why `fileDriver` reads 0 as 1 and the Android driver needs no such
-rule.
+Two things only Android could have answered, both of which held: SQLite 3.22
+accepts the empty `IN ()` that a no-results search produces, and the
+`AndroidSqliteDriver` upgrade path runs `1.sqm` correctly. Note Android stamps
+`user_version = 1` on create where the desktop driver stamped 0 — which is why
+`fileDriver` reads 0 as 1 and the Android driver needs no such rule.
 
-**Dictation works against real human speech** — confirmed on Matt's iPhone 17
-Pro on 2026-08-20, which retires the risk this file carried from the start.
-Android has been run too, on API 28. What remains before this could ship is
-listed under App Store readiness below.
+**Already handled, and worth not re-doing:** `ITSAppUsesNonExemptEncryption`
+is set, so export compliance is skipped; the microphone and speech usage
+strings are specific about on-device processing; and the privacy labels should
+be short and true — no network, no accounts, no analytics, audio never
+retained. That privacy story is the strongest marketing asset here.
 
 ## Advice
 

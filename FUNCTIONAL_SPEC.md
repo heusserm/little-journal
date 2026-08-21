@@ -42,6 +42,10 @@ The app has three tabs — **Today**, **Calendar**, **Search** — plus two scre
 reached by navigation: **Day** and **Editor**. The tab bar is visible on the
 three tabs and hidden on Day and Editor.
 
+On a wide screen — an iPad, or a large desktop window — content stops at a
+readable width and is centred rather than stretching to the edges. The tab bar
+still spans the full width.
+
 ### Today
 
 The default screen.

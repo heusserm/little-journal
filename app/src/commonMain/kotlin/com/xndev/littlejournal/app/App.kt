@@ -1,8 +1,10 @@
 package com.xndev.littlejournal.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -12,8 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.xndev.littlejournal.storage.JournalRepository
 
 private val JournalColors = darkColorScheme(
@@ -26,6 +30,20 @@ private val JournalColors = darkColorScheme(
     surfaceVariant = Color(0xFF26242C),
     onSurfaceVariant = Color(0xFFB6B2BF),
 )
+
+/**
+ * How wide the content is ever allowed to get.
+ *
+ * On a phone this does nothing — there is less width than this to begin with.
+ * On an iPad there is a great deal more, and without a cap every screen
+ * stretches edge to edge: a compose box thirteen inches wide is unpleasant to
+ * write in, and the calendar's day cells inflate into empty squares. Prose
+ * wants a measure, not a canvas.
+ *
+ * The tab bar is deliberately left full-width, which is what iPad users expect
+ * of it.
+ */
+private val ReadableWidth = 640.dp
 
 /** The tabbed screens keep the bar; pushed screens hide it. */
 private val Screen.isTab: Boolean
@@ -40,8 +58,13 @@ fun App(repo: JournalRepository, transcriber: Transcriber = NoopTranscriber) {
             Scaffold(
                 bottomBar = { if (state.screen.isTab) JournalNavBar(state) },
             ) { insets ->
-                Box(Modifier.fillMaxSize().padding(insets)) {
-                    CurrentScreen(state)
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(insets),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Box(Modifier.fillMaxHeight().widthIn(max = ReadableWidth)) {
+                        CurrentScreen(state)
+                    }
                 }
             }
         }

@@ -85,7 +85,7 @@ on the keyboard.
 One block, in the order that fails fastest:
 
 ```bash
-./gradlew :storage:jvmTest :app:desktopTest            # 121 Kotlin tests
+./gradlew :storage:jvmTest :app:desktopTest            # 123 Kotlin tests
 xcodebuild test -project iosApp/iosApp.xcodeproj -scheme iosApp \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   -derivedDataPath iosApp/dd                           # 10 Swift tests
@@ -100,7 +100,7 @@ versions. Keep it that way.
 
 ## Running the tests
 
-131 tests: 121 Kotlin, 10 Swift. All of them pass; keep it that way.
+133 tests: 123 Kotlin, 10 Swift. All of them pass; keep it that way.
 
 ```bash
 # Everything Kotlin — the usual command
@@ -128,6 +128,7 @@ HTML reports land in `storage/build/reports/tests/jvmTest/index.html` and
 | `PersistenceTest` | 7 | file-backed DB survives reopening — the only test proving a relaunch does not wipe the journal — and the schema 1 → 2 upgrade |
 | `SearchTest` | 14 | word search: whole words, multi-term, prefix on the term being typed, reindex on edit, paging past SQLite's parameter ceiling |
 | `SearchTokensTest` | 5 | the tokeniser, with no database in sight |
+| `TabletLayoutTest` | 2 | layout on an iPad-sized canvas — content capped and centred |
 | `JournalStateTest` | 17 | dictation callbacks, draft handling, time cleanup |
 | `JournalStatePagingTest` | 11 | month paging, editing, delete |
 | `SpokenTextTest` + `EdgeTest` | 16 | time correction, both directions |
@@ -356,7 +357,7 @@ people to ignore the tool.
 
 `--write-baseline` and `--compare` track drift over time.
 
-**As of 2026-08-20: mean SCRAP 5.6 across 131 tests, worst 25. `dry.py` reports
+**As of 2026-08-20: mean SCRAP 5.7 across 133 tests, worst 25. `dry.py` reports
 1.7% duplication.** A baseline is committed at `tools/.scrap-baseline.json`.
 
 Both found real problems on their first run, which is the only reason they are
@@ -406,13 +407,13 @@ numbers; every one of them is reproducible from `tools/`.
 | Metric | Value |
 |---|---|
 | Production methods | 116, across 947 lines |
-| Tests | **131** — 121 Kotlin, 10 Swift |
+| Tests | **133** — 123 Kotlin, 10 Swift |
 | Assertions | 220, 1.7 per test |
 | Kotlin line coverage | **95.8%** (643/671) |
 | Kotlin branch coverage | 77.8% (249/320) |
 | Swift line coverage | 38.6% (90/233) |
 | CRAP | mean **2.1**, max 20.0, **none over 30** |
-| SCRAP | mean **5.6** (healthy), worst 25 |
+| SCRAP | mean **5.7** (healthy), worst 25 |
 | Duplication | 1.7% (16 redundant lines) |
 | detekt | **0** |
 | SwiftLint | **0** |
@@ -642,12 +643,15 @@ App Store.
 
 Now that dictation is verified, what is actually left:
 
-* **`TARGETED_DEVICE_FAMILY: "1,2"` claims iPad support that has never been
-  run.** Apple tests iPad builds when you declare iPad, and the plist also
-  declares portrait-upside-down. Either test it at iPad size or set the family
-  to `"1"` and ship iPhone-only — one character, and the safer default. This
-  is the same class of defect as the month grid overlapping its own final week
-  on a short desktop window: nothing about the state is wrong, only the layout.
+* **iPad has now been run** (2026-08-20, iPad Pro 13-inch, iOS 26.5) and the
+  layout is fixed. It never crashed; it stretched. Every screen ran edge to
+  edge on a thirteen-inch canvas — a compose box that wide is unpleasant to
+  write in, and the calendar's day cells inflated into empty squares. The
+  month grid did *not* overlap, which was the suspected fault and was wrong.
+  Content is now capped at `ReadableWidth` (640dp) and centred in `App.kt`,
+  which is the single point every screen passes through; the tab bar stays
+  full width, as iPad users expect. `TabletLayoutTest` pins this at 1400x1000
+  and both of its assertions were confirmed to fail against the old layout.
 * **Release signing does not exist.** `CODE_SIGN_STYLE` is Automatic and only
   Debug has ever been built; distribution needs a certificate and profile.
 * **No privacy policy URL and no support URL.** Both are mandatory.

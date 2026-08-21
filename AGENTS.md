@@ -615,9 +615,19 @@ Measured with a throwaway macOS CLI spike against `say`-generated audio:
 - Language models download on demand via `AssetInventory`, managed by the OS.
   Not bundled — the app needs a first-run download state.
 
-**Untested:** real human speech on a real device. A SwiftUI probe called
-**Journal Spike** (`com.xndev.littleJournalSpike`) is installed on Matt's
-iPhone 17 Pro but has never been run.
+**Verified against real human speech on 2026-08-20**, on Matt's iPhone 17 Pro,
+running build 100 of the app itself rather than the old spike. It works. That
+had been the project's longest-standing open question, and every measurement
+before it came from `say`-generated audio on macOS.
+
+Take it for what it is: one person, one device, one session, judged by ear
+rather than against a transcript. It establishes that dictation is not broken
+— not that it is accurate across accents, noise or long entries. The failure
+modes worth watching are still the ones only `pump` can produce: text arriving
+twice, partials that never settle, finals that go missing.
+
+The old SwiftUI probe, **Journal Spike** (`com.xndev.littleJournalSpike`), was
+never run and is now redundant.
 
 ## Status
 
@@ -625,8 +635,34 @@ Storage, UI, the iOS wrapper, dictation, spoken-time cleanup and word-indexed
 search are built and committed. Runs on the iOS simulator and installs on a physical
 device.
 
-Not built: daily prompts, export/import, Android dictation. Nothing is
-shippable and nothing is on the App Store.
+Not built: daily prompts, export/import, Android dictation. Nothing is on the
+App Store.
+
+### App Store readiness
+
+Now that dictation is verified, what is actually left:
+
+* **`TARGETED_DEVICE_FAMILY: "1,2"` claims iPad support that has never been
+  run.** Apple tests iPad builds when you declare iPad, and the plist also
+  declares portrait-upside-down. Either test it at iPad size or set the family
+  to `"1"` and ship iPhone-only — one character, and the safer default. This
+  is the same class of defect as the month grid overlapping its own final week
+  on a short desktop window: nothing about the state is wrong, only the layout.
+* **Release signing does not exist.** `CODE_SIGN_STYLE` is Automatic and only
+  Debug has ever been built; distribution needs a certificate and profile.
+* **No privacy policy URL and no support URL.** Both are mandatory.
+* No App Store Connect record, description, keywords, age rating, or
+  screenshots. Screenshots follow `~/Code/AppStoreScreenshots`.
+* **No export**, so a user cannot get their own writing out of the app.
+
+Already handled, and worth not re-doing: `ITSAppUsesNonExemptEncryption` is
+set, so export compliance is skipped; the microphone and speech usage strings
+are specific about on-device processing; and the privacy labels should be
+short and true — no network, no accounts, no analytics, audio never retained.
+
+**Worth deciding deliberately:** the iOS 26 deployment target exists only
+because `SpeechAnalyzer` requires it. Storage, UI and search would run years
+further back, so that one feature is costing every user not on the newest OS.
 
 **Android was run for the first time on 2026-08-20**, on an API 28 emulator —
 the oldest available, and the closest thing to the minSdk 26 floor. It had
@@ -644,9 +680,10 @@ database stamps `user_version = 1` on create, where the desktop one stamped 0
 — which is why `fileDriver` reads 0 as 1 and the Android driver needs no such
 rule.
 
-**Dictation has never been verified against real human speech.** Everything
-measured so far was `say`-generated audio on macOS. The app is installed on
-Matt's iPhone 17 Pro awaiting that test.
+**Dictation works against real human speech** — confirmed on Matt's iPhone 17
+Pro on 2026-08-20, which retires the risk this file carried from the start.
+Android has been run too, on API 28. What remains before this could ship is
+listed under App Store readiness below.
 
 ## Advice
 

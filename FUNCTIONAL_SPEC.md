@@ -141,6 +141,9 @@ While listening, unsettled text is shown dimmed and replaced as the recognizer
 revises it. Settled text is appended to the draft. **Nothing is uploaded**, and
 audio is not retained.
 
+Verified on a physical iPhone with real speech on 2026-08-20. It cannot be
+tested any other way: the Simulator ships no speech-recognition assets.
+
 ### Spoken-time correction
 
 The recognizer writes times badly — "six thirty" arrives as `6.30`, "eleven

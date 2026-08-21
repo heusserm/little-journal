@@ -26,8 +26,10 @@ journal.db-shm
 journal.db-wal
 
 # Xcode
-iosApp/dd/
-iosApp/dd-device/
+# Any derived-data directory, not just the two that existed when this was
+# written. `iosApp/dd-ipad/` was 2,190 files and 147MB, and it was only kept
+# out of a commit because paths are staged explicitly rather than with -A.
+iosApp/dd*/
 iosApp/iosApp.xcodeproj/
 
 # Xcode result bundles from -resultBundlePath

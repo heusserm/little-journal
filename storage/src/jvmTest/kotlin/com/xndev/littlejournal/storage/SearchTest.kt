@@ -116,7 +116,7 @@ class SearchTest {
      * writing and the word "the".
      *
      * Be clear about what this test does and does not do: it pins the
-     * behaviour (ordered, cut to a page), but it cannot reproduce the crash.
+     * behavior (ordered, cut to a page), but it cannot reproduce the crash.
      * The desktop driver's SQLite allows 32,766 parameters, so the broken
      * version passed here too. Only Android's 3.19 would have failed, and
      * Android has no test suite in this project at all.

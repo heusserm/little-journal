@@ -45,7 +45,7 @@ class TabletLayoutTest {
             setContent { App(inMemoryRepository(), FakeTranscriber()) }
             onNodeWithText("Calendar").performClick()
 
-            // Monday's heading marks the grid's left edge. Centred inside a
+            // Monday's heading marks the grid's left edge. Centered inside a
             // 1400-wide canvas it should sit around (1400 - 640) / 2, near
             // 380dp; stretched full width it sits at the screen's own padding,
             // around 20dp. Asserting merely "> 0" was the first version of
@@ -66,5 +66,5 @@ private const val TALL = 1000
 /** The cap in App.kt, plus the padding the screens add inside it. */
 private val READABLE_MAX = 700.dp
 
-/** Far above a screen's own padding, far below a true centred margin. */
+/** Far above a screen's own padding, far below a true centered margin. */
 private val CENTRED_MARGIN_FLOOR = 200.dp

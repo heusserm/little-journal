@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 /**
  * The tokeniser decides what search can and cannot find, and it runs on both
  * sides of the index. Testing it directly — with no database in sight — is
- * what makes the query behaviour further down cheap to reason about.
+ * what makes the query behavior further down cheap to reason about.
  */
 class SearchTokensTest {
 

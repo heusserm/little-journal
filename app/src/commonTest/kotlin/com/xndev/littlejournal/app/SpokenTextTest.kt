@@ -60,7 +60,7 @@ class SpokenTextTest {
 class SpokenTextEdgeTest {
 
     @Test
-    fun `every time preposition is recognised`() {
+    fun `every time preposition is recognized`() {
         listOf("at", "around", "by", "until", "till", "before", "after", "since", "from").forEach {
             assertEquals("$it 9:15", SpokenText.tidy("$it 915"), "preposition '$it' should work")
         }

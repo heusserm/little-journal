@@ -12,10 +12,19 @@ Compose. Local-first, no backend, no accounts, no network.
 
 **What the app actually does today is specified in
 [`FUNCTIONAL_SPEC.md`](FUNCTIONAL_SPEC.md)** — read that before changing
-behaviour, and update it when behaviour changes. This file covers how to build
+behavior, and update it when behavior changes. This file covers how to build
 and test; that one covers what the thing does.
 
 ---
+
+## House style
+
+**US English, not British.** Color, not colour. License, not licence. Behavior,
+center, organize, recognize. This applies to prose, code comments, identifiers,
+and anything the app puts on screen.
+
+The audience is American and the App Store listing is en-US; a page that says
+"colour" beside a US price reads as though it were written for somewhere else.
 
 ## Layout
 
@@ -123,12 +132,12 @@ HTML reports land in `storage/build/reports/tests/jvmTest/index.html` and
 
 | Suite | Tests | Covers |
 |---|---:|---|
-| `JournalRepositoryTest` | 10 | schema behaviour: tombstones, date moves, counts |
+| `JournalRepositoryTest` | 10 | schema behavior: tombstones, date moves, counts |
 | `JournalRepositoryQueryTest` | 7 | ranges, tags, limits |
 | `PersistenceTest` | 7 | file-backed DB survives reopening — the only test proving a relaunch does not wipe the journal — and the schema 1 → 2 upgrade |
 | `SearchTest` | 14 | word search: whole words, multi-term, prefix on the term being typed, reindex on edit, paging past SQLite's parameter ceiling |
 | `SearchTokensTest` | 5 | the tokeniser, with no database in sight |
-| `TabletLayoutTest` | 2 | layout on an iPad-sized canvas — content capped and centred |
+| `TabletLayoutTest` | 2 | layout on an iPad-sized canvas — content capped and centered |
 | `JournalStateTest` | 17 | dictation callbacks, draft handling, time cleanup |
 | `JournalStatePagingTest` | 11 | month paging, editing, delete |
 | `SpokenTextTest` + `EdgeTest` | 16 | time correction, both directions |
@@ -180,7 +189,7 @@ just silencing rules.
 
 Out of the box detekt reported **108 weighted issues**; roughly 80% were Compose
 conventions, not defects. `@Composable` functions are PascalCase by design, and
-`dp`/`sp`/colour literals are not magic numbers. Two rounds of tuning brought it
+`dp`/`sp`/color literals are not magic numbers. Two rounds of tuning brought it
 to 2 real findings, both of which were worth fixing. **The tuning matters more
 than the tool** — a linter that cries wolf gets ignored, and then it protects
 nothing.
@@ -643,7 +652,7 @@ Android dictation, a lock**. Nothing is on the App Store.
 | Platform | State |
 |---|---|
 | **iPhone** | Runs on device. Dictation verified with real speech. The primary target. |
-| **iPad** | Runs. Layout capped and centred; see below. Declared via `TARGETED_DEVICE_FAMILY: "1,2"`. |
+| **iPad** | Runs. Layout capped and centered; see below. Declared via `TARGETED_DEVICE_FAMILY: "1,2"`. |
 | **Android** | Runs on API 28. Storage, migration, indexing and search all verified. No dictation. |
 | **Desktop** | Dev target only. Runs, builds a DMG, not for distribution. |
 
@@ -707,7 +716,7 @@ Being precise about this, because the gaps are where the next bug lives:
 thirteen-inch canvas — a compose box that wide is unpleasant to write in, and
 the calendar's day cells inflated into empty squares. The month grid did *not*
 overlap, which was the suspected fault and was wrong. Content is now capped at
-`ReadableWidth` (640dp) and centred in `App.kt`, the single point every screen
+`ReadableWidth` (640dp) and centered in `App.kt`, the single point every screen
 passes through; the tab bar stays full width, as iPad users expect.
 
 **Android was run for the first time on 2026-08-20**, on an API 28 emulator —
